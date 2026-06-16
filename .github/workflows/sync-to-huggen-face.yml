@@ -1,0 +1,53 @@
+name: Sync to Hugging Face Space
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  sync-to-hub:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Configure git identity
+        run: |
+          git config --global user.email "ci@github-actions.local"
+          git config --global user.name "GitHub Actions"
+
+      - name: Create clean orphan deploy branch
+        run: |
+          git checkout --orphan deploy
+
+          # Remove binary/build files HF rejects
+          rm -f public/*.png public/*.jpg public/*.ico || true
+          rm -rf build node_modules || true
+
+          # Generate HF Space README config
+          cat > README.md << 'EOF'
+          ---
+          title: Backend
+          emoji: 🚀
+          colorFrom: blue
+          colorTo: indigo
+          sdk: docker
+          pinned: false
+          ---
+
+          Check out the configuration reference at https://huggingface.co/docs/hub/spaces-config-reference
+          EOF
+
+          git add .
+          git commit -m "deploy: clean snapshot"
+
+      - name: Push to Hugging Face
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          git remote add hf https://fouad1212:$HF_TOKEN@huggingface.co/spaces/fouad1212/asd
+          git push hf deploy:main --force
