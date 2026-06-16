@@ -1,0 +1,34 @@
+{
+    "compilerOptions": {
+        "target": "ESNext",
+        "module": "CommonJS",
+        "moduleResolution": "node",
+        "baseUrl": ".",
+        "paths": {
+            "@shared/*": [
+                "src/libs/shared/*"
+            ],
+            "server/*": [
+                "src/libs/*"
+            ]
+        },
+        "outDir": "./dist",
+        "strict": true,
+        "esModuleInterop": true,
+        "skipLibCheck": true,
+        "forceConsistentCasingInFileNames": true,
+        "noImplicitAny": true,
+        "sourceMap": true,
+        "allowJs": true,
+        "resolveJsonModule": true
+    },
+    "include": [
+        "src/**/*",
+        "server/**/*"
+    ],
+    "exclude": [
+        "node_modules",
+        "dist",
+        "tests"
+    ]
+}

@@ -1,0 +1,41 @@
+query GetOrders($first: Int!, $after: String) {
+  orders(first: $first, after: $after) {
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+    edges {
+      node {
+        id
+        name
+        displayFinancialStatus
+        displayFulfillmentStatus
+        currencyCode
+        totalPriceSet {
+          shopMoney {
+            amount
+            currencyCode
+          }
+        }
+        customer {
+          id
+        }
+        lineItems(first: 20) {
+          edges {
+            node {
+              title
+              quantity
+              originalUnitPriceSet {
+                shopMoney {
+                  amount
+                }
+              }
+            }
+          }
+        }
+        updatedAt
+        createdAt
+      }
+    }
+  }
+}
