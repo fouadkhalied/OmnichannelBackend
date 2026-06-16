@@ -66,5 +66,14 @@
   },
   "optionalDependencies": {
     "bufferutil": "^4.0.8"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "bufferutil",
+      "es5-ext",
+      "esbuild",
+      "mongodb-memory-server",
+      "puppeteer"
+    ]
   }
 }
