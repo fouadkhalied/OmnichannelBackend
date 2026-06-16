@@ -6,6 +6,7 @@ import { IStagingRepository } from "../../../domain/repositories/IStagingReposit
 import { ChangeDetectionService } from "../../../domain/services/ChangeDetectionService";
 import { ShopifyEntityType } from "../../../domain/valueObjects/ShopifyEntityType";
 import { logger } from "../../../../../libs/common/logger";
+import { N8nForwardingService } from "../../../../n8n/N8nForwardingService";
 
 export class ProcessProductWebhookUseCase extends BaseService {
     constructor(
@@ -13,7 +14,8 @@ export class ProcessProductWebhookUseCase extends BaseService {
         private readonly shopifyClient: IShopifyGraphQLClient,
         private readonly connectorRepository: IConnectorRepository,
         private readonly stagingRepository: IStagingRepository,
-        private readonly changeDetectionService: ChangeDetectionService
+        private readonly changeDetectionService: ChangeDetectionService,
+        private readonly n8nForwardingService: N8nForwardingService
     ) {
         super(tenantContext);
     }
@@ -28,6 +30,15 @@ export class ProcessProductWebhookUseCase extends BaseService {
         // ── Handle delete ──────────────────────────────────────────────────
         if (input.eventType === "shopify.products.delete") {
             await this.stagingRepository.markDeleted(input.tenantId, entityType, input.entityId);
+
+            // Forward deletion to n8n
+            await this.n8nForwardingService.forwardWebhookEvent({
+                organizationId: this.tenantContext.organizationId!,
+                topic: input.eventType,
+                tenantId: input.tenantId,
+                payload: { id: input.entityId, deleted: true }
+            });
+
             logger.info("webhook.product_marked_deleted", {
                 tenantId: input.tenantId,
                 externalId: input.entityId,
@@ -36,7 +47,6 @@ export class ProcessProductWebhookUseCase extends BaseService {
         }
 
         // ── For create/update: fetch FULL entity from Shopify GraphQL ──────
-        // Never trust webhook payload — it's partial
         const credentials = await this.connectorRepository.getCredentials(input.tenantId);
         const product = await this.shopifyClient.fetchProductById({
             credentials,
@@ -86,6 +96,14 @@ export class ProcessProductWebhookUseCase extends BaseService {
             shopifyUpdatedAt: product.updatedAt,
             embedStatus: "pending",
             enrichStatus,
+        });
+
+        // ── Forward to n8n ────────────────────────────────────────────────
+        await this.n8nForwardingService.forwardWebhookEvent({
+            organizationId: this.tenantContext.organizationId!,
+            topic: input.eventType,
+            tenantId: input.tenantId,
+            payload: product
         });
 
         logger.info("webhook.product_staged", {

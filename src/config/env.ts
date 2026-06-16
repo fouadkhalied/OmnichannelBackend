@@ -30,6 +30,8 @@ const envSchema = z
     NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
     PORT: z.coerce.number().int().positive().default(5000),
     MONGODB_URI: z.string().min(1, "MONGODB_URI is required"),
+    API_BASE_URL: z.string().min(1).default("http://localhost:3000"),
+    FRONTEND_URL: z.string().min(1).default("http://localhost:3000"),
     MONGODB_DB_NAME: z.string().min(1).default("mock_data_manager"),
     MONGODB_CONNECT_MAX_RETRIES: z.coerce.number().int().min(1).default(5),
     MONGODB_CONNECT_RETRY_DELAY_MS: z.coerce.number().int().min(100).default(1000),

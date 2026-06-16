@@ -6,6 +6,7 @@ import { IStagingRepository } from "../../../domain/repositories/IStagingReposit
 import { ChangeDetectionService } from "../../../domain/services/ChangeDetectionService";
 import { ShopifyEntityType } from "../../../domain/valueObjects/ShopifyEntityType";
 import { logger } from "../../../../../libs/common/logger";
+import { N8nForwardingService } from "../../../../n8n/N8nForwardingService";
 
 export class ProcessOrderWebhookUseCase extends BaseService {
     constructor(
@@ -13,7 +14,8 @@ export class ProcessOrderWebhookUseCase extends BaseService {
         private readonly shopifyClient: IShopifyGraphQLClient,
         private readonly connectorRepository: IConnectorRepository,
         private readonly stagingRepository: IStagingRepository,
-        private readonly changeDetectionService: ChangeDetectionService
+        private readonly changeDetectionService: ChangeDetectionService,
+        private readonly n8nForwardingService: N8nForwardingService
     ) {
         super(tenantContext);
     }
@@ -54,13 +56,21 @@ export class ProcessOrderWebhookUseCase extends BaseService {
             tenantId: input.tenantId,
             entityType,
             externalId: input.entityId,
-            parentExternalId: order.customerId ?? null,
+            parentExternalId: order.customerId || null,
             payload: order,
             payloadHash: hash.value,
             deleted: false,
             shopifyUpdatedAt: order.updatedAt,
             embedStatus: "pending",
             enrichStatus: "skip",
+        });
+
+        // ── Forward to n8n ────────────────────────────────────────────────
+        await this.n8nForwardingService.forwardWebhookEvent({
+            organizationId: this.tenantContext.organizationId!,
+            topic: input.eventType,
+            tenantId: input.tenantId,
+            payload: order
         });
 
         logger.info("webhook.order_staged", {

@@ -6,6 +6,7 @@ import { IStagingRepository } from "../../../domain/repositories/IStagingReposit
 import { ChangeDetectionService } from "../../../domain/services/ChangeDetectionService";
 import { ShopifyEntityType } from "../../../domain/valueObjects/ShopifyEntityType";
 import { logger } from "../../../../../libs/common/logger";
+import { N8nForwardingService } from "../../../../n8n/N8nForwardingService";
 
 export class ProcessCustomerWebhookUseCase extends BaseService {
     constructor(
@@ -13,7 +14,8 @@ export class ProcessCustomerWebhookUseCase extends BaseService {
         private readonly shopifyClient: IShopifyGraphQLClient,
         private readonly connectorRepository: IConnectorRepository,
         private readonly stagingRepository: IStagingRepository,
-        private readonly changeDetectionService: ChangeDetectionService
+        private readonly changeDetectionService: ChangeDetectionService,
+        private readonly n8nForwardingService: N8nForwardingService
     ) {
         super(tenantContext);
     }
@@ -27,6 +29,15 @@ export class ProcessCustomerWebhookUseCase extends BaseService {
 
         if (input.eventType === "shopify.customers.delete") {
             await this.stagingRepository.markDeleted(input.tenantId, entityType, input.entityId);
+
+            // Forward deletion to n8n
+            await this.n8nForwardingService.forwardWebhookEvent({
+                organizationId: this.tenantContext.organizationId!,
+                topic: input.eventType,
+                tenantId: input.tenantId,
+                payload: { id: input.entityId, deleted: true }
+            });
+
             logger.info("webhook.customer_marked_deleted", {
                 tenantId: input.tenantId,
                 externalId: input.entityId,
@@ -70,6 +81,14 @@ export class ProcessCustomerWebhookUseCase extends BaseService {
             shopifyUpdatedAt: customer.updatedAt,
             embedStatus: "pending",
             enrichStatus: "skip",
+        });
+
+        // ── Forward to n8n ────────────────────────────────────────────────
+        await this.n8nForwardingService.forwardWebhookEvent({
+            organizationId: this.tenantContext.organizationId!,
+            topic: input.eventType,
+            tenantId: input.tenantId,
+            payload: customer
         });
 
         logger.info("webhook.customer_staged", {

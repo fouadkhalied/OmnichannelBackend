@@ -12,18 +12,19 @@ import { ValidationMiddleware } from "../../../../../libs/shared/presentation/ht
 import { SanitizationMiddleware } from "../../../../../libs/shared/presentation/http/middleware/validation/SanitizationMiddleware";
 import { IdempotencyMiddleware } from "../../../../../libs/shared/presentation/http/middleware/reliability/IdempotencyMiddleware";
 import { AuditMiddleware } from "../../../../../libs/shared/presentation/http/middleware/audit/AuditMiddleware";
-import { WebhookHmacMiddleware } from "../../../../../libs/shared/presentation/http/middleware/security/WebhookHmacMiddleware";
+import { WebhookShopDomainMiddleware } from "../../../../../libs/shared/presentation/http/middleware/security/WebhookShopDomainMiddleware";
+import { ShopifyOauthController } from "../controllers/ShopifyOauthController";
 import { z } from "zod";
 
 const router = Router();
+const oauthController = new ShopifyOauthController();
 
-// ── POST /sync ────────────────────────────────────────────────────────────────
-// Trigger a Shopify sync. Helmet and CORS are applied globally in app.ts — not here.
+// ── Sync ──────────────────────────────────────────────────────────────────────
 router.post(
     "/sync",
     LoggerMiddleware,
     RateLimiterMiddleware,
-    // AuthMiddleware, // Disabled since frontend doesn't send token
+    // AuthMiddleware,
     TenantMiddleware,
     PlanGuardMiddleware("free"),
     ValidationMiddleware(
@@ -39,16 +40,41 @@ router.post(
     ShopifySyncController
 );
 
-// ── POST /webhook ─────────────────────────────────────────────────────────────
-// Shopify webhooks use HMAC validation instead of JWT auth.
-// Raw body must be preserved for HMAC — do NOT use express.json() before this.
-// Returns 200 immediately; processing is async.
+// ── Webhooks ──────────────────────────────────────────────────────────────────
+// Uses WebhookShopDomainMiddleware which does HMAC verification + Tenant resolution in one step
 router.post(
     "/webhook",
     LoggerMiddleware,
-    WebhookHmacMiddleware,    // validates X-Shopify-Hmac-Sha256, replaces AuthMiddleware
-    TenantMiddleware,         // resolves tenant from X-Shopify-Shop-Domain header
-    ShopifyWebhookController  // returns 200 immediately, processes async via setImmediate
+    WebhookShopDomainMiddleware,
+    ShopifyWebhookController
+);
+
+// ── OAuth Flow ────────────────────────────────────────────────────────────────
+router.get(
+    "/oauth/initiate",
+    LoggerMiddleware,
+    RateLimiterMiddleware,
+    AuthMiddleware,
+    TenantMiddleware,
+    oauthController.initiate.bind(oauthController)
+);
+
+router.get(
+    "/oauth/callback",
+    LoggerMiddleware,
+    oauthController.callback.bind(oauthController)
+);
+
+// ── n8n Instance ──────────────────────────────────────────────────────────────
+import { N8nInstanceController } from "../controllers/N8nInstanceController";
+const n8nController = new N8nInstanceController();
+
+router.get(
+    "/n8n/instance",
+    LoggerMiddleware,
+    AuthMiddleware,
+    TenantMiddleware,
+    n8nController.getInstance.bind(n8nController)
 );
 
 export default router;

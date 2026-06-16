@@ -1,7 +1,13 @@
-import { logger } from "server/common/logger";
+import { logger } from "../../../../../libs/common/logger";
 import { ConnectorModel, ConnectorCredentialModel } from "../models/index";
-import { IConnectorRepository } from "src/modules/shopify/domain/repositories/IConnectorRepository";
+import {
+    IConnectorRepository,
+    ConnectorIdentity,
+    UpsertCredentialsInput,
+} from "src/modules/shopify/domain/repositories/IConnectorRepository";
 import { ShopifyCredentials } from "src/modules/shopify/domain/repositories/IShopifyGraphQLClient";
+import { decryptCredentials, encryptCredentials } from "../../../crypto/encrypt";
+import crypto from "crypto";
 
 /**
  * Splits tenantId into organizationId and storeId.
@@ -15,51 +21,9 @@ function splitTenantId(tenantId: string): { organizationId: string; storeId: str
     return { organizationId: tenantId, storeId: tenantId };
 }
 
-/**
- * Decrypts connector credentials.
- * If CONNECTOR_ENCRYPTION_SECRET is set, uses AES-256-GCM decryption.
- * Otherwise treats stored value as plain JSON (dev mode).
- */
-function decryptCredentials(encrypted: string): Record<string, unknown> {
-    try {
-        const secret = process.env.CONNECTOR_ENCRYPTION_SECRET;
-
-        if (!secret) {
-            // Dev mode — stored as plain JSON
-            return JSON.parse(encrypted);
-        }
-
-        // Production — AES-256-GCM encrypted base64
-        try {
-            const crypto = require("crypto");
-            const buffer = Buffer.from(encrypted, "base64");
-            const iv = buffer.subarray(0, 12);
-            const tag = buffer.subarray(12, 28);
-            const ciphertext = buffer.subarray(28);
-
-            const key = crypto.scryptSync(secret, "shopify-connector-salt", 32);
-            const decipher = crypto.createDecipheriv("aes-256-gcm", key, iv);
-            decipher.setAuthTag(tag);
-
-            const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
-            return JSON.parse(decrypted.toString("utf8"));
-        } catch (aesError) {
-            // Fallback: If decryption fails, see if it was stored as plain JSON in the test db
-            try {
-                return JSON.parse(encrypted);
-            } catch (jsonError) {
-                throw aesError; // If it's not valid JSON, throw the original crypto error
-            }
-        }
-    } catch (error) {
-        logger.error("MongoConnectorRepository.decryptCredentials.failed", {
-            error: error instanceof Error ? error.message : String(error),
-        });
-        throw new Error("Failed to decrypt connector credentials");
-    }
-}
-
 export class MongoConnectorRepository implements IConnectorRepository {
+    private readonly secret = process.env.CONNECTOR_ENCRYPTION_SECRET;
+
     async getCredentials(tenantId: string): Promise<ShopifyCredentials> {
         const { organizationId, storeId } = splitTenantId(tenantId);
 
@@ -77,10 +41,12 @@ export class MongoConnectorRepository implements IConnectorRepository {
             );
         }
 
-        const decrypted = decryptCredentials(credentialDoc.encryptedCredentials);
+        const decrypted = decryptCredentials(credentialDoc.encryptedCredentials, this.secret);
 
         const accessToken = String(decrypted.accessToken ?? "").trim();
-        const shopDomain = String(decrypted.shopDomain ?? decrypted.shopUrl ?? credentialDoc.shopDomain ?? "")
+        const shopDomain = String(
+            decrypted.shopDomain ?? decrypted.shopUrl ?? credentialDoc.shopDomain ?? ""
+        )
             .trim()
             .toLowerCase()
             .replace(/^https?:\/\//, "")
@@ -94,6 +60,110 @@ export class MongoConnectorRepository implements IConnectorRepository {
         }
 
         return { accessToken, shopDomain, apiVersion };
+    }
+
+    async findByShopDomain(shopDomain: string): Promise<ConnectorIdentity | null> {
+        const doc = await ConnectorCredentialModel.findOne({
+            provider: "shopify",
+            shopDomain,
+        })
+            .sort({ updatedAt: -1 })
+            .lean();
+
+        if (!doc) return null;
+
+        return {
+            organizationId: doc.organizationId,
+            storeId: doc.storeId,
+            tenantId: `${doc.organizationId}:${doc.storeId}`,
+        };
+    }
+
+    async getWebhookSecret(tenantId: string): Promise<string> {
+        const { organizationId, storeId } = splitTenantId(tenantId);
+
+        const doc = await ConnectorCredentialModel.findOne({
+            organizationId,
+            storeId,
+            provider: "shopify",
+        }).lean();
+
+        if (!doc?.webhookSecret) {
+            throw new Error(`Webhook secret not found for tenant ${tenantId}`);
+        }
+
+        return doc.webhookSecret;
+    }
+
+    async upsertCredentials(input: UpsertCredentialsInput): Promise<void> {
+        const encrypted = encryptCredentials(
+            JSON.stringify({
+                accessToken: input.accessToken,
+                shopDomain: input.shopDomain,
+                apiVersion: input.apiVersion,
+                scopes: input.scopes,
+                webhookSecret: input.webhookSecret,
+            }),
+            this.secret!
+        );
+
+        // 1. Ensure Connector exists
+        await ConnectorModel.updateOne(
+            {
+                organizationId: input.organizationId,
+                storeId: input.storeId,
+                provider: "shopify",
+            },
+            {
+                $set: {
+                    status: "connected",
+                    updatedAt: new Date(),
+                },
+                $setOnInsert: {
+                    id: crypto.randomUUID(),
+                    createdAt: new Date(),
+                },
+            },
+            { upsert: true }
+        );
+
+        // 2. Upsert Credentials
+        await ConnectorCredentialModel.updateOne(
+            {
+                organizationId: input.organizationId,
+                storeId: input.storeId,
+                provider: "shopify",
+            },
+            {
+                $set: {
+                    shopDomain: input.shopDomain,
+                    encryptedCredentials: encrypted,
+                    webhookSecret: input.webhookSecret,
+                    updatedAt: new Date(),
+                },
+                $setOnInsert: {
+                    connectorId: crypto.randomUUID(), // Use uuid for connectorId unique index requirement
+                    createdAt: new Date(),
+                },
+            },
+            { upsert: true }
+        );
+    }
+
+    async markConnected(tenantId: string, shopDomain: string): Promise<void> {
+        const { organizationId, storeId } = splitTenantId(tenantId);
+        await ConnectorModel.updateOne(
+            { organizationId, storeId, provider: "shopify" },
+            { $set: { status: "connected", updatedAt: new Date() } }
+        );
+    }
+
+    async markError(tenantId: string, error: string): Promise<void> {
+        const { organizationId, storeId } = splitTenantId(tenantId);
+        await ConnectorModel.updateOne(
+            { organizationId, storeId, provider: "shopify" },
+            { $set: { status: "error", lastError: error, updatedAt: new Date() } }
+        );
     }
 
     async updateLastSyncAt(tenantId: string): Promise<void> {

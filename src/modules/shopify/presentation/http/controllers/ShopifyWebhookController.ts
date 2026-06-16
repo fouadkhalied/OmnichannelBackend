@@ -7,21 +7,22 @@ import { PgStagingRepository } from "../../../infrastructure/postgres/repositori
 import { MongoConnectorRepository } from "../../../../../libs/shared/infrastructure/mongo/repositories/MongoConnectorRepository";
 import { ShopifyGraphQLClient } from "../../../infrastructure/shopify/graphql/ShopifyGraphQLClient";
 import { ChangeDetectionService } from "../../../domain/services/ChangeDetectionService";
-import { TenantContext } from "../../../../../libs/shared/domain/valueObjects/TenantContext";
+import { N8nForwardingService } from "../../../../n8n/N8nForwardingService";
+import { MongoN8nInstanceRepository } from "../../../../../libs/shared/infrastructure/mongo/repositories/MongoN8nInstanceRepository";
 import { logger } from "../../../../../libs/common/logger";
 
-// Shared instances — instantiated once, not per request
+// Shared instances — instantiated once
 const stagingRepository = new PgStagingRepository();
 const connectorRepository = new MongoConnectorRepository();
+const n8nRepository = new MongoN8nInstanceRepository();
 const shopifyClient = new ShopifyGraphQLClient();
 const changeDetectionService = new ChangeDetectionService();
+const n8nForwardingService = new N8nForwardingService(n8nRepository);
 
 const extractEntityId = (payload: any): string | null => {
     const id = payload?.id;
     if (!id) return null;
-    // Handle both numeric IDs and GIDs
     const str = String(id);
-    // If it's a GID like gid://shopify/Product/123, extract the numeric part
     const gidMatch = str.match(/\/(\d+)$/);
     return gidMatch ? gidMatch[1] : str;
 };
@@ -31,13 +32,13 @@ export const ShopifyWebhookController = async (req: Request, res: Response): Pro
     const shopDomain = req.headers["x-shopify-shop-domain"] as string;
     const payload = req.body;
 
-    // ── Return 200 immediately — Shopify retries if it doesn't get 200 fast ──
+    // 1. Return 200 immediately
     res.status(200).json({ received: true });
 
-    // ── Process async after response sent ─────────────────────────────────
+    // 2. Process async
     const eventType = ShopifyTopicMapper.toEventType(topic || "");
     const entityId = extractEntityId(payload);
-    const tenantContext = req.tenantContext;
+    const tenantContext = (req as any).tenantContext;
 
     if (!tenantContext || !entityId) {
         logger.warn("webhook.missing_context_or_entity_id", {
@@ -59,7 +60,8 @@ export const ShopifyWebhookController = async (req: Request, res: Response): Pro
                     shopifyClient,
                     connectorRepository,
                     stagingRepository,
-                    changeDetectionService
+                    changeDetectionService,
+                    n8nForwardingService
                 );
                 await useCase.execute({ tenantId, eventType, entityId });
 
@@ -69,7 +71,8 @@ export const ShopifyWebhookController = async (req: Request, res: Response): Pro
                     shopifyClient,
                     connectorRepository,
                     stagingRepository,
-                    changeDetectionService
+                    changeDetectionService,
+                    n8nForwardingService
                 );
                 await useCase.execute({ tenantId, eventType, entityId });
 
@@ -79,7 +82,8 @@ export const ShopifyWebhookController = async (req: Request, res: Response): Pro
                     shopifyClient,
                     connectorRepository,
                     stagingRepository,
-                    changeDetectionService
+                    changeDetectionService,
+                    n8nForwardingService
                 );
                 await useCase.execute({ tenantId, eventType, entityId });
 

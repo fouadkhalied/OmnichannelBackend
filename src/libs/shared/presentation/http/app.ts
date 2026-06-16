@@ -16,7 +16,11 @@ app.use(cors({
 }));
 
 // Body Parsers
-app.use(express.json());
+app.use(express.json({
+    verify: (req: any, res: any, buf: Buffer) => {
+        req.rawBody = buf;
+    }
+}));
 app.use(express.urlencoded({ extended: true }));
 
 // Request Logging

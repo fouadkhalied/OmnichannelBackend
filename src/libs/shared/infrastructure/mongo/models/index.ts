@@ -229,6 +229,7 @@ const connectorCredentialSchema = new Schema(
         },
         shopDomain: { type: String, default: null, index: true },
         encryptedCredentials: { type: String, required: true },
+        webhookSecret: { type: String, default: null },
         createdAt: { type: Date, default: Date.now },
         updatedAt: { type: Date, default: Date.now },
     },
@@ -236,6 +237,25 @@ const connectorCredentialSchema = new Schema(
 );
 connectorCredentialSchema.index({ organizationId: 1, storeId: 1, provider: 1 }, { unique: true });
 connectorCredentialSchema.index({ provider: 1, shopDomain: 1, updatedAt: -1 });
+
+const n8nInstanceSchema = new Schema(
+    {
+        id: { type: String, required: true, unique: true },
+        organizationId: { type: String, required: true, index: true },
+        n8nSpaceUrl: { type: String, required: true },
+        n8nApiKeyEnc: { type: String, required: true },
+        n8nWebhookSecret: { type: String, required: true },
+        status: {
+            type: String,
+            enum: ["provisioning", "active", "error", "suspended"],
+            default: "provisioning",
+        },
+        createdAt: { type: Date, default: Date.now },
+        updatedAt: { type: Date, default: Date.now },
+    },
+    { ...baseOptions, collection: "n8n_instances" },
+);
+n8nInstanceSchema.index({ organizationId: 1 }, { unique: true });
 
 const orderSchema = new Schema(
     {
@@ -728,6 +748,8 @@ export const CounterModel = models.Counter || model("Counter", counterSchema);
 export const ConnectorModel = models.Connector || model("Connector", connectorSchema);
 export const ConnectorCredentialModel =
     models.ConnectorCredential || model("ConnectorCredential", connectorCredentialSchema);
+export const N8nInstanceModel =
+    models.N8nInstance || model("N8nInstance", n8nInstanceSchema);
 export const OrderModel = models.Order || model("Order", orderSchema);
 export const OrderNotificationModel =
     models.OrderNotification || model("OrderNotification", orderNotificationSchema);
@@ -789,6 +811,7 @@ export async function ensureMongoIndexes() {
         SettingsModel.createIndexes(),
         ConnectorModel.createIndexes(),
         ConnectorCredentialModel.createIndexes(),
+        N8nInstanceModel.createIndexes(),
         OrderModel.createIndexes(),
         OrderNotificationModel.createIndexes(),
         ShopifyEntityModel.createIndexes(),
