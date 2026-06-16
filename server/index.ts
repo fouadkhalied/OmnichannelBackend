@@ -63,7 +63,6 @@ async function bootstrap() {
         );
 
         const runSyncJob = new RunSyncJobUseCase(
-            workerTenantContext,
             shopifyClient,
             stagingRepository,
             connectorRepository,
