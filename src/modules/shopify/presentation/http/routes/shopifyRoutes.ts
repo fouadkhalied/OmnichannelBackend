@@ -14,10 +14,12 @@ import { IdempotencyMiddleware } from "../../../../../libs/shared/presentation/h
 import { AuditMiddleware } from "../../../../../libs/shared/presentation/http/middleware/audit/AuditMiddleware";
 import { WebhookShopDomainMiddleware } from "../../../../../libs/shared/presentation/http/middleware/security/WebhookShopDomainMiddleware";
 import { ShopifyOauthController } from "../controllers/ShopifyOauthController";
+import { N8nInstanceController } from "../controllers/N8nInstanceController";
 import { z } from "zod";
 
 const router = Router();
 const oauthController = new ShopifyOauthController();
+const n8nController = new N8nInstanceController();
 
 // ── Sync ──────────────────────────────────────────────────────────────────────
 router.post(
@@ -65,13 +67,16 @@ router.get(
     oauthController.callback.bind(oauthController)
 );
 
-// ── n8n Instance ──────────────────────────────────────────────────────────────
-import { N8nInstanceController } from "../controllers/N8nInstanceController";
-const n8nController = new N8nInstanceController();
+// ── n8n Instance ─────────────────────────────────────────────────────────────
+router.post(
+    "/n8n/instance",
+    AuthMiddleware,
+    TenantMiddleware,
+    n8nController.register.bind(n8nController)
+);
 
 router.get(
     "/n8n/instance",
-    LoggerMiddleware,
     AuthMiddleware,
     TenantMiddleware,
     n8nController.getInstance.bind(n8nController)

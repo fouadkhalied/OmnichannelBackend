@@ -1,0 +1,67 @@
+{
+    "nodes": [
+        {
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "shopify/webhooks",
+                "options": {}
+            },
+            "id": "18c1-1e2f-4474-92d4-ec6623aa2abe",
+            "name": "Shopify Webhook Proxy",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 1,
+            "position": [
+                450,
+                300
+            ],
+            "webhookId": "shopify-proxy"
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "string": [
+                        {
+                            "value1": "={{ $req.headers['x-shopify-topic'] }}",
+                            "operation": "contains",
+                            "value2": "products/"
+                        }
+                    ]
+                }
+            },
+            "id": "2b30193e-83b3-c392-1192-9cad0e1f2031",
+            "name": "Is Product Event?",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 1,
+            "position": [
+                650,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "content": "## Workflow Instructions\n1. This webhook receives verified Shopify data from your backend.\n2. **Headers available**:\n   - `X-Tenant-Id`: The user's internal ID\n   - `X-Shopify-Topic`: The original Shopify topic (e.g. products/update)\n3. **Security**: Your backend has already verified the HMAC signature before sending it here."
+            },
+            "id": "4192bff0-e1e0-43ce-a4db-912808c32493",
+            "name": "Note",
+            "type": "n8n-nodes-base.stickyNote",
+            "typeVersion": 1,
+            "position": [
+                380,
+                140
+            ]
+        }
+    ],
+    "connections": {
+        "Shopify Webhook Proxy": {
+            "main": [
+                [
+                    {
+                        "node": "Is Product Event?",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    }
+}
