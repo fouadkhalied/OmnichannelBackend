@@ -33,17 +33,7 @@ export class CompleteOauthUseCase extends BaseService {
     }
 
     async execute(input: CompleteOauthInput): Promise<CompleteOauthOutput> {
-        // 1. Verify HMAC
-        const isValidHmac = verifyShopifyCallbackHmac({
-            rawQuery: input.rawQuery,
-            clientSecret: env.SHOPIFY_APP_CLIENT_SECRET || "",
-        });
-
-        if (!isValidHmac) {
-            throw new UnauthorizedError("Invalid Shopify callback HMAC");
-        }
-
-        // 2. Verify State
+        // 2. Verify State (need state first to get clientSecret for HMAC check)
         const payload = verifySignedShopifyOauthState(
             input.state,
             env.SHOPIFY_OAUTH_STATE_SECRET || "dev-state-secret-change-me",
@@ -57,7 +47,17 @@ export class CompleteOauthUseCase extends BaseService {
             throw new UnauthorizedError("Shopify OAuth state expired");
         }
 
-        const { organizationId, storeId, shopDomain, apiVersion } = payload;
+        const { organizationId, storeId, shopDomain, apiVersion, clientId, clientSecret } = payload;
+
+        // 1. Verify Callback HMAC using the clientSecret from the state
+        const isValidHmac = verifyShopifyCallbackHmac({
+            rawQuery: input.rawQuery,
+            clientSecret: clientSecret,
+        });
+
+        if (!isValidHmac) {
+            throw new UnauthorizedError("Invalid Shopify callback HMAC");
+        }
 
         // 3. Exchange code for access token
         const tokenResponse = await fetch(
@@ -66,8 +66,8 @@ export class CompleteOauthUseCase extends BaseService {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    client_id: env.SHOPIFY_APP_CLIENT_ID || "",
-                    client_secret: env.SHOPIFY_APP_CLIENT_SECRET || "",
+                    client_id: clientId,
+                    client_secret: clientSecret,
                     code: input.code,
                 }),
             }
@@ -92,6 +92,8 @@ export class CompleteOauthUseCase extends BaseService {
             storeId,
             shopDomain,
             accessToken: access_token,
+            clientId,
+            clientSecret,
             apiVersion,
             webhookSecret,
             scopes: scope,

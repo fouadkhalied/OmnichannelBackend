@@ -5,6 +5,8 @@ import { ShopifyOrder } from "../entities/ShopifyOrder";
 export type ShopifyCredentials = {
     accessToken: string;
     shopDomain: string;
+    clientId: string;
+    clientSecret: string;
     apiVersion: string;
 };
 

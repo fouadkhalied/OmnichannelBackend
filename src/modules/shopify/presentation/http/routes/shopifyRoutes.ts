@@ -50,7 +50,7 @@ router.post(
 );
 
 // ── OAuth Flow ────────────────────────────────────────────────────────────────
-router.get(
+router.post(
     "/oauth/initiate",
     AuthMiddleware,
     TenantMiddleware,

@@ -11,6 +11,8 @@ export type UpsertCredentialsInput = {
     storeId: string;
     shopDomain: string;
     accessToken: string;
+    clientId: string;
+    clientSecret: string;
     apiVersion: string;
     webhookSecret: string;
     scopes: string;

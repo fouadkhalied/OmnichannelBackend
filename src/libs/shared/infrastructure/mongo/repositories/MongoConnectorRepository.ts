@@ -52,14 +52,16 @@ export class MongoConnectorRepository implements IConnectorRepository {
             .replace(/^https?:\/\//, "")
             .replace(/\/+$/, "");
         const apiVersion = String(decrypted.apiVersion ?? "2025-01").trim() || "2025-01";
+        const clientId = String(decrypted.clientId ?? "").trim();
+        const clientSecret = String(decrypted.clientSecret ?? "").trim();
 
-        if (!accessToken || !shopDomain) {
+        if (!accessToken || !shopDomain || !clientId || !clientSecret) {
             throw new Error(
-                `Shopify credentials incomplete for tenant ${tenantId}: missing accessToken or shopDomain`
+                `Shopify credentials incomplete for tenant ${tenantId}: missing accessToken, shopDomain, clientId, or clientSecret`
             );
         }
 
-        return { accessToken, shopDomain, apiVersion };
+        return { accessToken, shopDomain, apiVersion, clientId, clientSecret };
     }
 
     async findByShopDomain(shopDomain: string): Promise<ConnectorIdentity | null> {
@@ -100,6 +102,8 @@ export class MongoConnectorRepository implements IConnectorRepository {
             JSON.stringify({
                 accessToken: input.accessToken,
                 shopDomain: input.shopDomain,
+                clientId: input.clientId,
+                clientSecret: input.clientSecret,
                 apiVersion: input.apiVersion,
                 scopes: input.scopes,
                 webhookSecret: input.webhookSecret,

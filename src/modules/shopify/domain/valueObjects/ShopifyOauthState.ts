@@ -7,6 +7,8 @@ export interface ShopifyOauthStatePayload {
     organizationId: string;
     storeId: string;
     shopDomain: string;
+    clientId: string;
+    clientSecret: string;
     apiVersion: string;
     nonce: string;
     iat: number;

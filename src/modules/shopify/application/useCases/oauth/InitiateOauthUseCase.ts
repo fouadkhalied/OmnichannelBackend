@@ -14,6 +14,8 @@ export interface InitiateOauthInput {
     organizationId: string;
     storeId: string;
     shopDomain: string;
+    clientId: string;
+    clientSecret: string;
     apiVersion: string;
 }
 
@@ -44,6 +46,8 @@ export class InitiateOauthUseCase extends BaseService {
                 organizationId: input.organizationId,
                 storeId: input.storeId,
                 shopDomain: normalizedShop,
+                clientId: input.clientId,
+                clientSecret: input.clientSecret,
                 apiVersion: input.apiVersion,
                 nonce,
                 iat: now,
@@ -60,7 +64,7 @@ export class InitiateOauthUseCase extends BaseService {
         //   &state={signedState}
 
         const scopes = env.SHOPIFY_OAUTH_SCOPES;
-        const clientId = env.SHOPIFY_APP_CLIENT_ID;
+        const clientId = input.clientId;
         const redirectUri = `${env.API_BASE_URL}/api/shopify/oauth/callback`;
         const redirectUrl = `https://${normalizedShop}/admin/oauth/authorize?client_id=${clientId}&scope=${encodeURIComponent(scopes)}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${stateToken}`;
 

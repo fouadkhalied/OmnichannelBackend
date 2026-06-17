@@ -13,10 +13,10 @@ export class ShopifyOauthController {
     async initiate(req: Request, res: Response): Promise<void> {
         try {
             const tenantContext = (req as any).tenantContext;
-            const shop = req.query.shop as string;
+            const { shop, clientId, clientSecret } = req.body;
 
-            if (!shop) {
-                res.status(400).json({ error: "Missing 'shop' query parameter" });
+            if (!shop || !clientId || !clientSecret) {
+                res.status(400).json({ error: "Missing 'shop', 'clientId', or 'clientSecret' in request body" });
                 return;
             }
 
@@ -30,6 +30,8 @@ export class ShopifyOauthController {
                 organizationId: tenantContext.organizationId,
                 storeId: tenantContext.storeId,
                 shopDomain: shop,
+                clientId,
+                clientSecret,
                 apiVersion: "2025-01",
             });
 
