@@ -1,5 +1,6 @@
 import { Router } from "express";
 import shopifyRoutes from "../../../../../modules/shopify/presentation/http/routes/shopifyRoutes";
+import authRoutes from "../../../../../modules/auth/presentation/http/routes/authRoutes";
 
 const router = Router();
 
@@ -10,5 +11,6 @@ router.get("/health", (req, res) => {
 
 // Module Routes
 router.use("/shopify", shopifyRoutes);
+router.use("/auth", authRoutes);
 
 export default router;
