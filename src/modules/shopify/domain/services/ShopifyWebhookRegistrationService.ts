@@ -12,13 +12,8 @@ export interface RegisterWebhooksInput {
 
 export class ShopifyWebhookRegistrationService {
     private readonly topics = [
-        "products/create",
         "products/update",
-        "products/delete",
-        "customers/create",
         "customers/update",
-        "orders/create",
-        "orders/updated",
     ];
 
     async registerWebhooks(input: RegisterWebhooksInput): Promise<void> {

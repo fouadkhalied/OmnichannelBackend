@@ -53,7 +53,7 @@ const envSchema = z
     SHOPIFY_APP_CLIENT_SECRET: z.string().min(1).optional(),
     SHOPIFY_OAUTH_STATE_SECRET: z.string().min(16).optional(),
     SHOPIFY_OAUTH_SCOPES: z.string().min(1).default(
-      "read_products,read_inventory,read_customers,read_orders",
+      "read_products,read_inventory,read_customers",
     ),
     SHOPIFY_OAUTH_STATE_TTL_MS: z.coerce.number().int().min(60_000).default(600_000),
     META_WEBHOOK_SECRET: z.string().min(1).optional(),
