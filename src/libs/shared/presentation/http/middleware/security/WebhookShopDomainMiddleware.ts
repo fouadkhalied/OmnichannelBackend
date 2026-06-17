@@ -41,11 +41,13 @@ export const WebhookShopDomainMiddleware = async (
             return next(new UnauthorizedError("Unauthorized access"));
         }
 
-        // 2. Use the global App Client Secret for HMAC validation (Public App standard)
-        const webhookSecret = env.SHOPIFY_APP_CLIENT_SECRET;
+        // 2. Decrypt credentials to get the specific secret for THIS store
+        const encryptionSecret = env.CONNECTOR_ENCRYPTION_SECRET;
+        const decrypted = decryptCredentials(credentialDoc.encryptedCredentials, encryptionSecret);
+        const webhookSecret = String(decrypted.webhookSecret || "");
 
         if (!webhookSecret) {
-            logger.error("webhook.app_client_secret_missing_in_env");
+            logger.error("webhook.secret_missing_in_db", { shopDomain });
             return next(new UnauthorizedError("Internal server error"));
         }
 
