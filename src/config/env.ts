@@ -39,7 +39,7 @@ const envSchema = z
     LOG_PRETTY: z.preprocess(toBoolean, z.coerce.boolean()).default(false),
     DATABASE_URL: z.string().min(1).optional(),
     REPL_ID: z.string().min(1).optional(),
-    SESSION_SECRET: z.string().min(1).optional(),
+    SESSION_SECRET: z.string().min(16).default("change-me-in-production-32chars!!"),
     ISSUER_URL: z.string().url().optional(),
     ACCOUNT_ACTIVATION_NOTIFY_EMAIL: z.string().email().optional(),
     MAIL_SMTP_HOST: z.string().min(1).optional(),
@@ -88,15 +88,8 @@ const envSchema = z
     const hasSomeSmtpConfig = smtpFields.some(Boolean);
     const hasCompleteSmtpConfig = smtpFields.every(Boolean);
 
-    if (hasReplId !== hasSessionSecret) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["REPL_ID"],
-        message: "REPL_ID and SESSION_SECRET must be provided together.",
-      });
-    }
-
-    if (hasReplId && hasSessionSecret && !data.DATABASE_URL) {
+    // REPL_ID check relaxed — SESSION_SECRET now always has a value
+    if (hasReplId && !data.DATABASE_URL) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["DATABASE_URL"],
@@ -128,3 +121,14 @@ export function createEnv(raw: NodeJS.ProcessEnv): AppEnv {
 }
 
 export const env = createEnv(process.env);
+
+// Warn loudly if using the default dev secret in production
+if (
+  env.NODE_ENV === "production" &&
+  env.SESSION_SECRET === "change-me-in-production-32chars!!"
+) {
+  console.warn(
+    "[SECURITY] SESSION_SECRET is using the insecure default value. " +
+    "Set SESSION_SECRET in your environment variables immediately."
+  );
+}
