@@ -64,6 +64,11 @@ export const WebhookShopDomainMiddleware = async (
             return next(new UnauthorizedError("Raw body missing for validation"));
         }
 
+        logger.info("webhook.raw_body_captured", {
+            shopDomain,
+            bodySize: rawBody.length
+        });
+
         const computedHash = createHmac("sha256", webhookSecret)
             .update(rawBody)
             .digest();
