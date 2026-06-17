@@ -26,7 +26,7 @@ export class ShopifyOauthController {
             );
 
             const { redirectUrl } = await useCase.execute({
-                userId: (req as any).user?.id || "anonymous",
+                userId: (req as any).userId || (req as any).user?.claims?.sub || "anonymous",
                 organizationId: tenantContext.organizationId,
                 storeId: tenantContext.storeId,
                 shopDomain: shop,

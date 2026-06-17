@@ -22,10 +22,10 @@ const oauthController = new ShopifyOauthController();
 // ── Sync ──────────────────────────────────────────────────────────────────────
 router.post(
     "/sync",
+    AuthMiddleware,
+    TenantMiddleware,
     LoggerMiddleware,
     RateLimiterMiddleware,
-    // AuthMiddleware,
-    TenantMiddleware,
     PlanGuardMiddleware("free"),
     ValidationMiddleware(
         z.object({
@@ -52,10 +52,10 @@ router.post(
 // ── OAuth Flow ────────────────────────────────────────────────────────────────
 router.get(
     "/oauth/initiate",
-    LoggerMiddleware,
-    RateLimiterMiddleware,
     AuthMiddleware,
     TenantMiddleware,
+    LoggerMiddleware,
+    RateLimiterMiddleware,
     oauthController.initiate.bind(oauthController)
 );
 

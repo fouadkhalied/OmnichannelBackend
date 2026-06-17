@@ -7,6 +7,7 @@ import {
 import crypto from "crypto";
 import { IConnectorRepository } from "../../../domain/repositories/IConnectorRepository";
 import { env } from "../../../../../config/env";
+import { logger } from "../../../../../libs/common/logger";
 
 export interface InitiateOauthInput {
     userId: string;
@@ -62,6 +63,14 @@ export class InitiateOauthUseCase extends BaseService {
         const clientId = env.SHOPIFY_APP_CLIENT_ID;
         const redirectUri = `${env.API_BASE_URL}/api/shopify/oauth/callback`;
         const redirectUrl = `https://${normalizedShop}/admin/oauth/authorize?client_id=${clientId}&scope=${encodeURIComponent(scopes)}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${stateToken}`;
+
+        logger.info("shopify.oauth_initiate", {
+            shop: normalizedShop,
+            clientId: clientId ? `${clientId.slice(0, 4)}...` : "MISSING",
+            redirectUri,
+            scopes,
+            fullUrl: redirectUrl
+        });
 
         return { redirectUrl };
     }
