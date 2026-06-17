@@ -33,7 +33,9 @@ export const WebhookShopDomainMiddleware = async (
         const credentialDoc = await ConnectorCredentialModel.findOne({
             provider: "shopify",
             shopDomain: shopDomain.toLowerCase(),
-        }).lean();
+        })
+            .sort({ updatedAt: -1 })
+            .lean();
 
         if (!credentialDoc) {
             // Do NOT reveal why it failed for security
@@ -53,21 +55,32 @@ export const WebhookShopDomainMiddleware = async (
 
         // 3. Re-verify HMAC using THIS store's webhookSecret
         const rawBody = (req as any).rawBody;
-        if (!rawBody) {
+        if (!rawBody || !Buffer.isBuffer(rawBody)) {
+            logger.error("webhook.raw_body_missing_or_invalid", {
+                shopDomain,
+                hasRawBody: !!rawBody,
+                isBuffer: Buffer.isBuffer(rawBody)
+            });
             return next(new UnauthorizedError("Raw body missing for validation"));
         }
 
         const computedHash = createHmac("sha256", webhookSecret)
             .update(rawBody)
-            .digest("base64");
+            .digest();
+
+        const hmacBuffer = Buffer.from(String(hmacHeader), "base64");
 
         if (
-            !timingSafeEqual(
-                Buffer.from(computedHash),
-                Buffer.from(String(hmacHeader)),
-            )
+            computedHash.length !== hmacBuffer.length ||
+            !timingSafeEqual(computedHash, hmacBuffer)
         ) {
-            logger.warn("webhook.hmac_mismatch", { shopDomain });
+            logger.warn("webhook.hmac_mismatch", {
+                shopDomain,
+                expectedLength: hmacBuffer.length,
+                computedLength: computedHash.length,
+                // Log first few chars of secret for debugging (safe-ish if masked)
+                secretPrefix: webhookSecret.substring(0, 4) + "..."
+            });
             return next(new UnauthorizedError("HMAC validation failed"));
         }
 
