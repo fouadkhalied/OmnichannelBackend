@@ -16,7 +16,8 @@
     "db:migrate": "tsx server/migrations/runner.ts",
     "db:backfill": "tsx server/scripts/backfill.ts",
     "whatsapp:simple": "node scripts/whatsapp-simple.cjs",
-    "db:push": "drizzle-kit push"
+    "db:push": "drizzle-kit push",
+    "hf:sync-env": "tsx script/sync-hf-env.ts"
   },
   "dependencies": {
     "connect-pg-simple": "^10.0.0",

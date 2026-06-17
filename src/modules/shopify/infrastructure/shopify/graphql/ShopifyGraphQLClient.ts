@@ -3,7 +3,6 @@ import path from "path";
 import { logger } from "../../../../../libs/common/logger";
 import { ShopifyProduct } from "../../../domain/entities/ShopifyProduct";
 import { GraphQLPage, IShopifyGraphQLClient, ShopifyCredentials } from "../../../domain/repositories/IShopifyGraphQLClient";
-import { fileURLToPath } from "url";
 import { ProductMapper } from "./mappers/ProductMapper";
 import { ShopifyOrder } from "../../../domain/entities/ShopifyOrder";
 import { OrderMapper } from "./mappers/OrderMapper";
