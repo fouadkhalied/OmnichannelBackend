@@ -1,6 +1,7 @@
 import { BaseService } from "../../../../../libs/shared/application/BaseService";
 import { TenantContext } from "../../../../../libs/shared/domain/valueObjects/TenantContext";
 import {
+    normalizeAndValidateShopDomain,
     verifyShopifyCallbackHmac,
     verifySignedShopifyOauthState,
 } from "../../../domain/valueObjects/ShopifyOauthState";
@@ -47,7 +48,11 @@ export class CompleteOauthUseCase extends BaseService {
             throw new UnauthorizedError("Shopify OAuth state expired");
         }
 
-        const { organizationId, storeId, shopDomain, apiVersion, clientId, clientSecret } = payload;
+        const { organizationId, storeId, apiVersion, clientId, clientSecret } = payload;
+
+        // 0. Extract the actual shop domain from the callback query (this is the definitive .myshopify.com domain)
+        const params = new URLSearchParams(input.rawQuery);
+        const actualShopDomain = normalizeAndValidateShopDomain(params.get("shop") || payload.shopDomain);
 
         // 1. Verify Callback HMAC using the clientSecret from the state
         const isValidHmac = verifyShopifyCallbackHmac({
@@ -61,7 +66,7 @@ export class CompleteOauthUseCase extends BaseService {
 
         // 3. Exchange code for access token
         const tokenResponse = await fetch(
-            `https://${shopDomain}/admin/oauth/access_token`,
+            `https://${actualShopDomain}/admin/oauth/access_token`,
             {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -90,7 +95,7 @@ export class CompleteOauthUseCase extends BaseService {
         await this.connectorRepository.upsertCredentials({
             organizationId,
             storeId,
-            shopDomain,
+            shopDomain: actualShopDomain,
             accessToken: access_token,
             clientId,
             clientSecret,
@@ -100,10 +105,8 @@ export class CompleteOauthUseCase extends BaseService {
         });
 
         // 6. Register webhooks
-        // Note: This is an async fire-and-forget or we can wait for it.
-        // The spec implies it's part of the flow.
         await this.webhookService.registerWebhooks({
-            shopDomain,
+            shopDomain: actualShopDomain,
             accessToken: access_token,
             webhookSecret,
             organizationId,
@@ -113,7 +116,7 @@ export class CompleteOauthUseCase extends BaseService {
         return {
             organizationId,
             storeId,
-            shopDomain,
+            shopDomain: actualShopDomain,
             scopes: scope,
         };
     }
