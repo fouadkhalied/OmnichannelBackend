@@ -4,6 +4,7 @@ import { ConnectorCredentialModel } from "../../../../infrastructure/mongo/model
 import { UnauthorizedError } from "../../../../domain/errors/UnauthorizedError";
 import { decryptCredentials } from "../../../../crypto/encrypt";
 import { logger } from "../../../../../common/logger";
+import { env } from "../../../../../../config/env";
 import { runWithTenantContext } from "../../tenant/TenantResolver";
 
 /**
@@ -40,14 +41,12 @@ export const WebhookShopDomainMiddleware = async (
             return next(new UnauthorizedError("Unauthorized access"));
         }
 
-        // 2. Decrypt to get the secret
-        const secret = process.env.CONNECTOR_ENCRYPTION_SECRET;
-        const decrypted = decryptCredentials(credentialDoc.encryptedCredentials, secret);
-        const webhookSecret = (decrypted.webhookSecret as string) || credentialDoc.webhookSecret;
+        // 2. Use the global App Client Secret for HMAC validation (Public App standard)
+        const webhookSecret = env.SHOPIFY_APP_CLIENT_SECRET;
 
         if (!webhookSecret) {
-            logger.error("webhook.secret_missing_in_db", { shopDomain });
-            return next(new UnauthorizedError("Unauthorized access"));
+            logger.error("webhook.app_client_secret_missing_in_env");
+            return next(new UnauthorizedError("Internal server error"));
         }
 
         // 3. Re-verify HMAC using THIS store's webhookSecret

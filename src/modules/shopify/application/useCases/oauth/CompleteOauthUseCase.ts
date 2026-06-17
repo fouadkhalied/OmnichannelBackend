@@ -83,8 +83,8 @@ export class CompleteOauthUseCase extends BaseService {
             scope: string;
         };
 
-        // 4. Generate per-store webhook secret
-        const webhookSecret = crypto.randomBytes(32).toString("hex");
+        // 4. Use global App Client Secret for webhooks (standard for Shopify Public Apps)
+        const webhookSecret = env.SHOPIFY_APP_CLIENT_SECRET!;
 
         // 5. Save credentials
         await this.connectorRepository.upsertCredentials({
