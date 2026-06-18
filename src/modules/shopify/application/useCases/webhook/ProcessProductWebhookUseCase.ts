@@ -15,7 +15,8 @@ export class ProcessProductWebhookUseCase extends BaseService {
         private readonly connectorRepository: IConnectorRepository,
         private readonly stagingRepository: IStagingRepository,
         private readonly changeDetectionService: ChangeDetectionService,
-        private readonly n8nForwardingService: N8nForwardingService
+        private readonly n8nForwardingService: N8nForwardingService,
+        private readonly uowFactory: any // UnitOfWorkFactory
     ) {
         super(tenantContext);
     }
@@ -85,17 +86,39 @@ export class ProcessProductWebhookUseCase extends BaseService {
             ? "pending"
             : "skip";
 
-        await this.stagingRepository.upsert({
-            tenantId: input.tenantId,
-            entityType,
-            externalId: input.entityId,
-            parentExternalId: null,
-            payload: product,
-            payloadHash: hash.value,
-            deleted: false,
-            shopifyUpdatedAt: product.updatedAt,
-            embedStatus: "pending",
-            enrichStatus,
+        // ── Atomic Update via Unit of Work ────────────────────────────────
+        await this.uowFactory.execute(async ({ products }: any) => {
+            // 1. Update Core Structured Table
+            await products.upsert({
+                tenantId: input.tenantId,
+                shopifyId: input.entityId,
+                handle: product.handle,
+                title: product.title,
+                vendor: product.vendor,
+                productType: product.productType,
+                status: product.status?.toLowerCase(),
+                //descriptionHtml: product.descriptionHtml,
+                tags: product.tags,
+                data: product, // Store full raw payload in jsonb
+                contentHash: hash.value,
+                embeddingStatus: "pending",
+                shopifyCreatedAt: product.createdAt,
+                shopifyUpdatedAt: product.updatedAt,
+            });
+
+            // 2. Update Legacy Staging table (optional, for backward compat during migration)
+            await this.stagingRepository.upsert({
+                tenantId: input.tenantId,
+                entityType,
+                externalId: input.entityId,
+                parentExternalId: null,
+                payload: product,
+                payloadHash: hash.value,
+                deleted: false,
+                shopifyUpdatedAt: product.updatedAt,
+                embedStatus: "pending",
+                enrichStatus,
+            });
         });
 
         // ── Forward to n8n ────────────────────────────────────────────────
@@ -106,11 +129,10 @@ export class ProcessProductWebhookUseCase extends BaseService {
             payload: product
         });
 
-        logger.info("webhook.product_staged", {
+        logger.info("webhook.product_migrated", {
             tenantId: input.tenantId,
             externalId: input.entityId,
             eventType: input.eventType,
-            enrichStatus,
         });
     }
 }

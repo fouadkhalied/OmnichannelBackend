@@ -2,10 +2,10 @@ import { ShopifySyncJob, SyncJobType, SyncProgress } from "../entities/ShopifySy
 import { SyncJobStatus } from "../valueObjects/SyncJobStatus";
 
 export interface ISyncJobRepository {
-    findActiveSyncJob(tenantId: string): Promise<ShopifySyncJob | null>;
-    findLatestFailedJob(tenantId: string): Promise<ShopifySyncJob | null>;
+    findActiveSyncJob(storeId: string): Promise<ShopifySyncJob | null>;
+    findLatestFailedJob(storeId: string): Promise<ShopifySyncJob | null>;
     createSyncJob(input: {
-        tenantId: string;
+        storeId: string;
         type: SyncJobType;
         triggeredBy: string;
     }): Promise<ShopifySyncJob>;

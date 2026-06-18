@@ -15,7 +15,8 @@ export class ProcessOrderWebhookUseCase extends BaseService {
         private readonly connectorRepository: IConnectorRepository,
         private readonly stagingRepository: IStagingRepository,
         private readonly changeDetectionService: ChangeDetectionService,
-        private readonly n8nForwardingService: N8nForwardingService
+        private readonly n8nForwardingService: N8nForwardingService,
+        private readonly uowFactory: any // UnitOfWorkFactory
     ) {
         super(tenantContext);
     }
@@ -52,17 +53,61 @@ export class ProcessOrderWebhookUseCase extends BaseService {
             return;
         }
 
-        await this.stagingRepository.upsert({
-            tenantId: input.tenantId,
-            entityType,
-            externalId: input.entityId,
-            parentExternalId: order.customerId || null,
-            payload: order,
-            payloadHash: hash.value,
-            deleted: false,
-            shopifyUpdatedAt: order.updatedAt,
-            embedStatus: "pending",
-            enrichStatus: "skip",
+        // ── Atomic Update via Unit of Work ────────────────────────────────
+        await this.uowFactory.execute(async ({ orders, orderLineItems, customers }: any) => {
+            // 1. Ensure Customer exists if linked
+            let internalCustomerId: string | undefined;
+            if (order.customerId) {
+                const customer = await customers.findByShopifyId(input.tenantId, order.customerId);
+                internalCustomerId = customer?.id;
+            }
+
+            // 2. Update Core Order Table
+            const savedOrder = await orders.upsert({
+                tenantId: input.tenantId,
+                shopifyId: input.entityId,
+                orderNumber: order.name, // ShopifyOrder has 'name' which usually is the order number
+                customerId: internalCustomerId,
+                shopifyCustomerId: order.customerId,
+                email: (order as any).email, // Check if exists
+                phone: (order as any).phone,
+                financialStatus: order.financialStatus,
+                fulfillmentStatus: order.fulfillmentStatus,
+                totalPrice: order.totalPrice,
+                currency: order.currency,
+                data: order,
+                shopifyUpdatedAt: order.updatedAt,
+            });
+
+            // 3. Update Line Items
+            if (order.lineItems && Array.isArray(order.lineItems)) {
+                await orderLineItems.deleteByOrder(savedOrder.id);
+                for (const item of order.lineItems) {
+                    await orderLineItems.upsert({
+                        tenantId: input.tenantId,
+                        orderId: savedOrder.id,
+                        shopifyId: (item as any).id || crypto.randomUUID(), // ShopifyLineItem might not have ID in some payload versions
+                        title: item.title,
+                        quantity: item.quantity,
+                        price: item.price,
+                        data: item,
+                    });
+                }
+            }
+
+            // 4. Update Legacy Staging table
+            await this.stagingRepository.upsert({
+                tenantId: input.tenantId,
+                entityType,
+                externalId: input.entityId,
+                parentExternalId: order.customerId || null,
+                payload: order,
+                payloadHash: hash.value,
+                deleted: false,
+                shopifyUpdatedAt: order.updatedAt,
+                embedStatus: "pending",
+                enrichStatus: "skip",
+            });
         });
 
         // ── Forward to n8n ────────────────────────────────────────────────
@@ -73,7 +118,7 @@ export class ProcessOrderWebhookUseCase extends BaseService {
             payload: order
         });
 
-        logger.info("webhook.order_staged", {
+        logger.info("webhook.order_migrated", {
             tenantId: input.tenantId,
             externalId: input.entityId,
             eventType: input.eventType,

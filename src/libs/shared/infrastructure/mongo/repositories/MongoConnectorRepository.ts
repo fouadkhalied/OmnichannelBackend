@@ -27,6 +27,29 @@ export class MongoConnectorRepository implements IConnectorRepository {
     async getCredentials(tenantId: string): Promise<ShopifyCredentials> {
         const { organizationId, storeId } = splitTenantId(tenantId);
 
+        // 1. Try Postgres first (Migration target)
+        try {
+            const { requireDb } = await import("../../../infrastructure/postgres/PgClient");
+            const { PgCredentialRepository } = await import("../../../infrastructure/postgres/repositories/PgCredentialRepository");
+
+            const pgRepo = new PgCredentialRepository(requireDb());
+            const pgDoc = await pgRepo.findByTenantId(organizationId);
+
+            if (pgDoc && pgDoc.status === "active") {
+                const decrypted = decryptCredentials(pgDoc.encryptedCredentials, this.secret);
+                return {
+                    accessToken: String(decrypted.accessToken || "").trim(),
+                    shopDomain: pgDoc.shopDomain,
+                    apiVersion: pgDoc.apiVersion,
+                    clientId: pgDoc.clientId,
+                    clientSecret: String(decrypted.clientSecret || "").trim(),
+                };
+            }
+        } catch (error) {
+            logger.warn("MongoConnectorRepository.getCredentials.pg_failed", { tenantId, error });
+        }
+
+        // 2. Fallback to Mongo (Legacy)
         const credentialDoc = await ConnectorCredentialModel.findOne({
             organizationId,
             storeId,
@@ -111,7 +134,8 @@ export class MongoConnectorRepository implements IConnectorRepository {
             this.secret!
         );
 
-        // 1. Ensure Connector exists
+        // 1. Dual-write to Mongo (Legacy)
+        // Ensure Connector exists
         await ConnectorModel.updateOne(
             {
                 organizationId: input.organizationId,
@@ -131,7 +155,7 @@ export class MongoConnectorRepository implements IConnectorRepository {
             { upsert: true }
         );
 
-        // 2. Upsert Credentials
+        // Upsert Credentials
         await ConnectorCredentialModel.updateOne(
             {
                 organizationId: input.organizationId,
@@ -152,6 +176,36 @@ export class MongoConnectorRepository implements IConnectorRepository {
             },
             { upsert: true }
         );
+
+        // 2. Dual-write to Postgres (Migration Target)
+        try {
+            const { requireDb } = await import("../../../infrastructure/postgres/PgClient");
+            const { PgCredentialRepository } = await import("../../../infrastructure/postgres/repositories/PgCredentialRepository");
+
+            const pgRepo = new PgCredentialRepository(requireDb());
+            await pgRepo.upsert({
+                organizationId: input.organizationId,
+                storeId: input.storeId,
+                shopDomain: input.shopDomain,
+                provider: "shopify",
+                clientId: input.clientId,
+                apiVersion: input.apiVersion,
+                scopes: input.scopes,
+                encryptedCredentials: encrypted,
+                status: "active",
+            });
+            logger.info("MongoConnectorRepository.upsertCredentials.pg_success", {
+                organizationId: input.organizationId,
+                storeId: input.storeId
+            });
+        } catch (error) {
+            logger.error("MongoConnectorRepository.upsertCredentials.pg_failed", {
+                organizationId: input.organizationId,
+                storeId: input.storeId,
+                error
+            });
+            // We don't throw here to keep Mongo working even if PG fails during migration phase
+        }
     }
 
     async markConnected(tenantId: string, shopDomain: string): Promise<void> {

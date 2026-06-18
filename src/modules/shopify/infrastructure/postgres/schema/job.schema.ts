@@ -1,8 +1,9 @@
-import { pgTable, varchar, jsonb, text, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, varchar, jsonb, text, integer, timestamp, uuid, index } from "drizzle-orm/pg-core";
+import { stores } from "../../../../../libs/shared/infrastructure/postgres/schema/stores";
 
 export const syncJobs = pgTable("sync_jobs", {
   id: varchar("id").primaryKey(),
-  tenantId: varchar("tenant_id").notNull(),
+  storeId: uuid("store_id").notNull().references(() => stores.id, { onDelete: "cascade" }),
   provider: varchar("provider").default("shopify").notNull(),
   type: varchar("type").notNull(),
   status: varchar("status").default("pending").notNull(),
@@ -17,7 +18,9 @@ export const syncJobs = pgTable("sync_jobs", {
   nextRunAt: timestamp("next_run_at").defaultNow().notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (t) => ({
+  storeIdx: index("idx_sync_jobs_store").on(t.storeId),
+}));
 
 export const playingWithNeon = pgTable("playing_with_neon", {
   id: integer("id").primaryKey().notNull(),

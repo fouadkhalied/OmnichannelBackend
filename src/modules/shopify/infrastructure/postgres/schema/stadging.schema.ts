@@ -1,8 +1,9 @@
-import { boolean, jsonb, text, timestamp, pgTable, uniqueIndex } from "drizzle-orm/pg-core";
+import { boolean, jsonb, text, timestamp, pgTable, uuid, index, unique } from "drizzle-orm/pg-core";
+import { stores } from "../../../../../libs/shared/infrastructure/postgres/schema/stores";
 
 export const shopifyStaging = pgTable("shopify_staging", {
-  id: text("id").primaryKey(),
-  tenantId: text("tenant_id").notNull(),
+  id: uuid("id").primaryKey().defaultRandom(),
+  storeId: uuid("store_id").notNull().references(() => stores.id, { onDelete: "cascade" }),
   entityType: text("entity_type").notNull(),
   externalId: text("external_id").notNull(),
   parentExternalId: text("parent_external_id"),
@@ -22,8 +23,9 @@ export const shopifyStaging = pgTable("shopify_staging", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => {
   return {
-    uniqueExternalId: uniqueIndex("shopify_staging_unique_external_id").on(
-      table.tenantId,
+    storeIdx: index("idx_staging_store").on(table.storeId),
+    uniqueConstraint: unique("uq_staging_store_type_ext").on(
+      table.storeId,
       table.entityType,
       table.externalId
     ),

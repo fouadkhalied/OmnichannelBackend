@@ -1,8 +1,9 @@
 import { Request, Response } from "express";
 import { z } from "zod";
-import { signupUseCase } from "../../../application/useCases/SignupUseCase";
-import { loginUseCase } from "../../../application/useCases/LoginUseCase";
+import { SignupUseCase } from "../../../application/useCases/SignupUseCase";
+import { LoginUseCase } from "../../../application/useCases/LoginUseCase";
 import { logoutUseCase } from "../../../application/useCases/LogoutUseCase";
+import { UnitOfWorkFactory } from "../../../../../libs/shared/infrastructure/postgres/unitOfWork/UnitOfWorkFactory";
 
 const signupSchema = z.object({
     email: z.string().email(),
@@ -17,6 +18,14 @@ const loginSchema = z.object({
 });
 
 export class AuthController {
+    private readonly signupUseCase: SignupUseCase;
+    private readonly loginUseCase: LoginUseCase;
+
+    constructor(uowFactory: UnitOfWorkFactory) {
+        this.signupUseCase = new SignupUseCase(uowFactory);
+        this.loginUseCase = new LoginUseCase(uowFactory);
+    }
+
     async signup(req: Request, res: Response): Promise<void> {
         const parsed = signupSchema.safeParse(req.body);
         if (!parsed.success) {
@@ -25,7 +34,7 @@ export class AuthController {
         }
 
         try {
-            const result = await signupUseCase(parsed.data);
+            const result = await this.signupUseCase.execute(parsed.data);
             res.status(201).json(result);
         } catch (err: any) {
             res.status(err.statusCode ?? 500).json({ error: err.message ?? "Signup failed" });
@@ -40,7 +49,7 @@ export class AuthController {
         }
 
         try {
-            const result = await loginUseCase(parsed.data);
+            const result = await this.loginUseCase.execute(parsed.data);
             res.status(200).json(result);
         } catch (err: any) {
             res.status(err.statusCode ?? 500).json({ error: err.message ?? "Login failed" });
@@ -56,7 +65,6 @@ export class AuthController {
     }
 
     async me(req: Request, res: Response): Promise<void> {
-        // req.userId and req.user are set by AuthMiddleware
         const user = (req as any).user;
         res.status(200).json({
             userId: (req as any).userId,

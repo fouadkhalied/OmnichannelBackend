@@ -15,7 +15,7 @@ export interface SyncProgress {
 export class ShopifySyncJob {
     constructor(
         public readonly id: string,
-        public readonly tenantId: string,
+        public readonly storeId: string,
         public readonly type: SyncJobType,
         public status: SyncJobStatus,
         public progress: SyncProgress,

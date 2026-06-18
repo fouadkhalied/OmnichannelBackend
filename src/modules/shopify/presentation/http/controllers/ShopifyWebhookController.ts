@@ -10,6 +10,8 @@ import { ChangeDetectionService } from "../../../domain/services/ChangeDetection
 import { N8nForwardingService } from "../../../../n8n/N8nForwardingService";
 import { MongoN8nInstanceRepository } from "../../../../../libs/shared/infrastructure/mongo/repositories/MongoN8nInstanceRepository";
 import { logger } from "../../../../../libs/common/logger";
+import { requireDb } from "../../../../../libs/shared/infrastructure/postgres/PgClient";
+import { UnitOfWorkFactory } from "../../../../../libs/shared/infrastructure/postgres/unitOfWork/UnitOfWorkFactory";
 
 // Shared instances — instantiated once
 const stagingRepository = new PgStagingRepository();
@@ -18,6 +20,7 @@ const n8nRepository = new MongoN8nInstanceRepository();
 const shopifyClient = new ShopifyGraphQLClient();
 const changeDetectionService = new ChangeDetectionService();
 const n8nForwardingService = new N8nForwardingService(n8nRepository);
+const uowFactory = new UnitOfWorkFactory(requireDb());
 
 const extractEntityId = (payload: any): string | null => {
     const id = payload?.id;
@@ -61,7 +64,8 @@ export const ShopifyWebhookController = async (req: Request, res: Response): Pro
                     connectorRepository,
                     stagingRepository,
                     changeDetectionService,
-                    n8nForwardingService
+                    n8nForwardingService,
+                    uowFactory
                 );
                 await useCase.execute({ tenantId, eventType, entityId });
 
@@ -72,7 +76,8 @@ export const ShopifyWebhookController = async (req: Request, res: Response): Pro
                     connectorRepository,
                     stagingRepository,
                     changeDetectionService,
-                    n8nForwardingService
+                    n8nForwardingService,
+                    uowFactory
                 );
                 await useCase.execute({ tenantId, eventType, entityId });
 
@@ -83,7 +88,8 @@ export const ShopifyWebhookController = async (req: Request, res: Response): Pro
                     connectorRepository,
                     stagingRepository,
                     changeDetectionService,
-                    n8nForwardingService
+                    n8nForwardingService,
+                    uowFactory
                 );
                 await useCase.execute({ tenantId, eventType, entityId });
 

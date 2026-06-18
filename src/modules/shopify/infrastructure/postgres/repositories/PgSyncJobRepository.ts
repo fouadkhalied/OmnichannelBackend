@@ -8,10 +8,12 @@ import { logger } from "../../../../../libs/common/logger";
 import { syncJobs, SyncJobRow } from "../schema/job.schema";
 
 export class PgSyncJobRepository implements ISyncJobRepository {
+    constructor(private readonly db: any = requireDb()) { }
+
     private toDomain(row: SyncJobRow): ShopifySyncJob {
         return new ShopifySyncJob(
             row.id,
-            row.tenantId,
+            row.storeId as any,
             row.type as SyncJobType,
             SyncJobStatus.fromString(row.status),
             row.progress as SyncProgress,
@@ -28,59 +30,56 @@ export class PgSyncJobRepository implements ISyncJobRepository {
         );
     }
 
-    async findActiveSyncJob(tenantId: string): Promise<ShopifySyncJob | null> {
+    async findActiveSyncJob(storeId: string): Promise<ShopifySyncJob | null> {
         try {
-            const db = requireDb();
-            const [row] = await db
+            const [row] = await this.db
                 .select()
                 .from(syncJobs)
                 .where(
                     and(
-                        eq(syncJobs.tenantId, tenantId),
+                        eq(syncJobs.storeId, storeId as any),
                         inArray(syncJobs.status, ["pending", "running", "retry_scheduled"])
                     )
                 )
                 .orderBy(desc(syncJobs.createdAt))
                 .limit(1);
 
-            return row ? this.toDomain(row) : null;
+            return row ? this.toDomain(row as any) : null;
         } catch (error) {
-            logger.error("PgSyncJobRepository.findActiveSyncJob.error", { tenantId, error });
+            logger.error("PgSyncJobRepository.findActiveSyncJob.error", { storeId, error });
             throw error;
         }
     }
 
-    async findLatestFailedJob(tenantId: string): Promise<ShopifySyncJob | null> {
+    async findLatestFailedJob(storeId: string): Promise<ShopifySyncJob | null> {
         try {
-            const db = requireDb();
-            const [row] = await db
+            const [row] = await this.db
                 .select()
                 .from(syncJobs)
                 .where(
                     and(
-                        eq(syncJobs.tenantId, tenantId),
+                        eq(syncJobs.storeId, storeId as any),
                         eq(syncJobs.status, "failed")
                     )
                 )
                 .orderBy(desc(syncJobs.createdAt))
                 .limit(1);
 
-            return row ? this.toDomain(row) : null;
+            return row ? this.toDomain(row as any) : null;
         } catch (error) {
-            logger.error("PgSyncJobRepository.findLatestFailedJob.error", { tenantId, error });
+            logger.error("PgSyncJobRepository.findLatestFailedJob.error", { storeId, error });
             throw error;
         }
     }
 
-    async createSyncJob(input: { tenantId: string; type: SyncJobType; triggeredBy: string }): Promise<ShopifySyncJob> {
+    async createSyncJob(input: { storeId: string; type: SyncJobType; triggeredBy: string }): Promise<ShopifySyncJob> {
         try {
-            const db = requireDb();
             const id = `sync_${crypto.randomUUID()}`;
-            const [row] = await db
+            const [row] = await this.db
                 .insert(syncJobs)
                 .values({
                     id,
-                    tenantId: input.tenantId,
+                    storeId: input.storeId as any,
                     type: input.type,
                     status: "pending",
                     triggeredBy: input.triggeredBy,
@@ -90,7 +89,7 @@ export class PgSyncJobRepository implements ISyncJobRepository {
                 })
                 .returning();
 
-            return this.toDomain(row);
+            return this.toDomain(row as any);
         } catch (error) {
             logger.error("PgSyncJobRepository.createSyncJob.error", { input, error });
             throw error;
@@ -98,13 +97,11 @@ export class PgSyncJobRepository implements ISyncJobRepository {
     }
 
     async findById(jobId: string): Promise<ShopifySyncJob | null> {
-        const db = requireDb();
-        const [row] = await db.select().from(syncJobs).where(eq(syncJobs.id, jobId)).limit(1);
-        return row ? this.toDomain(row) : null;
+        const [row] = await this.db.select().from(syncJobs).where(eq(syncJobs.id, jobId)).limit(1);
+        return row ? this.toDomain(row as any) : null;
     }
 
     async updateStatus(jobId: string, status: SyncJobStatus, extra?: Partial<ShopifySyncJob>): Promise<void> {
-        const db = requireDb();
         const updateData: any = {
             status: status.getValue(),
             updatedAt: new Date(),
@@ -117,12 +114,11 @@ export class PgSyncJobRepository implements ISyncJobRepository {
             if (extra.finishedAt !== undefined) updateData.finishedAt = extra.finishedAt;
         }
 
-        await db.update(syncJobs).set(updateData).where(eq(syncJobs.id, jobId));
+        await this.db.update(syncJobs).set(updateData).where(eq(syncJobs.id, jobId));
     }
 
     async markCompleted(jobId: string, progress: SyncProgress): Promise<void> {
-        const db = requireDb();
-        await db
+        await this.db
             .update(syncJobs)
             .set({
                 status: "completed",
@@ -134,8 +130,7 @@ export class PgSyncJobRepository implements ISyncJobRepository {
     }
 
     async markFailed(jobId: string, error: string, attempts: number, nextRunAt: Date): Promise<void> {
-        const db = requireDb();
-        await db
+        await this.db
             .update(syncJobs)
             .set({
                 status: "failed",
@@ -168,11 +163,9 @@ export class PgSyncJobRepository implements ISyncJobRepository {
 
             const row = res.rows[0];
 
-            // Map raw pg results (snake_case) to domain row attributes (camelCase)
-            // for toDomain helper to work correctly.
             const domainRow: any = {
                 id: row.id,
-                tenantId: row.tenant_id,
+                storeId: row.store_id,
                 provider: row.provider,
                 type: row.type,
                 status: row.status,

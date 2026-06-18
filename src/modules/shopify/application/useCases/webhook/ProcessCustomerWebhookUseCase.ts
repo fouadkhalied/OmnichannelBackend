@@ -15,7 +15,8 @@ export class ProcessCustomerWebhookUseCase extends BaseService {
         private readonly connectorRepository: IConnectorRepository,
         private readonly stagingRepository: IStagingRepository,
         private readonly changeDetectionService: ChangeDetectionService,
-        private readonly n8nForwardingService: N8nForwardingService
+        private readonly n8nForwardingService: N8nForwardingService,
+        private readonly uowFactory: any // UnitOfWorkFactory
     ) {
         super(tenantContext);
     }
@@ -70,17 +71,36 @@ export class ProcessCustomerWebhookUseCase extends BaseService {
             return;
         }
 
-        await this.stagingRepository.upsert({
-            tenantId: input.tenantId,
-            entityType,
-            externalId: input.entityId,
-            parentExternalId: null,
-            payload: customer,
-            payloadHash: hash.value,
-            deleted: false,
-            shopifyUpdatedAt: customer.updatedAt,
-            embedStatus: "pending",
-            enrichStatus: "skip",
+        // ── Atomic Update via Unit of Work ────────────────────────────────
+        await this.uowFactory.execute(async ({ customers }: any) => {
+            // 1. Update Core Structured Table
+            await customers.upsert({
+                tenantId: input.tenantId,
+                shopifyId: input.entityId,
+                email: customer.email,
+                phone: customer.phone,
+                firstName: customer.firstName,
+                lastName: customer.lastName,
+                ordersCount: customer.ordersCount,
+                totalSpent: customer.totalSpent,
+                tags: customer.tags,
+                data: customer,
+                shopifyUpdatedAt: customer.updatedAt,
+            });
+
+            // 2. Update Legacy Staging table
+            await this.stagingRepository.upsert({
+                tenantId: input.tenantId,
+                entityType,
+                externalId: input.entityId,
+                parentExternalId: null,
+                payload: customer,
+                payloadHash: hash.value,
+                deleted: false,
+                shopifyUpdatedAt: customer.updatedAt,
+                embedStatus: "pending",
+                enrichStatus: "skip",
+            });
         });
 
         // ── Forward to n8n ────────────────────────────────────────────────
@@ -91,7 +111,7 @@ export class ProcessCustomerWebhookUseCase extends BaseService {
             payload: customer
         });
 
-        logger.info("webhook.customer_staged", {
+        logger.info("webhook.customer_migrated", {
             tenantId: input.tenantId,
             externalId: input.entityId,
             eventType: input.eventType,
