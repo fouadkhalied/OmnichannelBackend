@@ -34,7 +34,7 @@ export class N8nForwardingService {
             // 3. Build Webhook URL
             // Format assumed: instance.n8nSpaceUrl + /webhook/ + some path
             // For now we use a generic path /shopify/webhooks
-            const targetUrl = `${instance.n8nSpaceUrl}/webhook/shopify/webhooks`;
+            const targetUrl = `${instance.n8nSpaceUrl}/shopify/webhooks`;
 
             // 4. POST to n8n
             const response = await fetch(targetUrl, {
