@@ -5,7 +5,7 @@ import { ShopifySyncJob, SyncJobType, SyncProgress } from "../../../domain/entit
 import { SyncCursor } from "../../../domain/types/SyncCursor";
 import { SyncJobStatus } from "../../../domain/valueObjects/SyncJobStatus";
 import { logger } from "../../../../../libs/common/logger";
-import { syncJobs, SyncJobRow } from "../schema/job.schema";
+import { syncJobs, SyncJob as SyncJobRow } from "../../../../../libs/shared/infrastructure/postgres/schema/syncJobs";
 
 export class PgSyncJobRepository implements ISyncJobRepository {
     constructor(private readonly db: any = requireDb()) { }
