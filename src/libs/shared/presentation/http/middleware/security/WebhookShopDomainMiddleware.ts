@@ -46,7 +46,7 @@ export const WebhookShopDomainMiddleware = async (
         // 2. Decrypt credentials to get the specific secret for THIS store
         const encryptionSecret = env.CONNECTOR_ENCRYPTION_SECRET;
         const decrypted = decryptCredentials(credentialDoc.encryptedCredentials, encryptionSecret);
-        const webhookSecret = String(decrypted.webhookSecret || "");
+        const webhookSecret = String(decrypted.clientSecret);
 
         if (!webhookSecret) {
             logger.error("webhook.secret_missing_in_db", { shopDomain });
