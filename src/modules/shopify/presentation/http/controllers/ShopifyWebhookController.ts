@@ -12,16 +12,6 @@ import { MongoN8nInstanceRepository } from "../../../../../libs/shared/infrastru
 import { logger } from "../../../../../libs/common/logger";
 import { requireDb } from "../../../../../libs/shared/infrastructure/postgres/PgClient";
 import { UnitOfWorkFactory } from "../../../../../libs/shared/infrastructure/postgres/unitOfWork/UnitOfWorkFactory";
-
-// Shared instances — instantiated once
-const stagingRepository = new PgStagingRepository();
-const connectorRepository = new MongoConnectorRepository();
-const n8nRepository = new MongoN8nInstanceRepository();
-const shopifyClient = new ShopifyGraphQLClient();
-const changeDetectionService = new ChangeDetectionService();
-const n8nForwardingService = new N8nForwardingService(n8nRepository);
-const uowFactory = new UnitOfWorkFactory(requireDb());
-
 const extractEntityId = (payload: any): string | null => {
     const id = payload?.id;
     if (!id) return null;
@@ -31,6 +21,15 @@ const extractEntityId = (payload: any): string | null => {
 };
 
 export const ShopifyWebhookController = async (req: Request, res: Response): Promise<void> => {
+    // ── Shared instances — created inside function to ensure DB connection is ready ──
+    const stagingRepository = new PgStagingRepository();
+    const connectorRepository = new MongoConnectorRepository();
+    const n8nRepository = new MongoN8nInstanceRepository();
+    const shopifyClient = new ShopifyGraphQLClient();
+    const changeDetectionService = new ChangeDetectionService();
+    const n8nForwardingService = new N8nForwardingService(n8nRepository);
+    const uowFactory = new UnitOfWorkFactory(requireDb());
+
     const topic = req.headers["x-shopify-topic"] as string;
     const shopDomain = req.headers["x-shopify-shop-domain"] as string;
     const payload = req.body;

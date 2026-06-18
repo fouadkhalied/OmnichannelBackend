@@ -4,11 +4,11 @@ import { PgSyncJobRepository } from "../../../infrastructure/postgres/repositori
 import { InMemoryEventPublisher } from "../../../application/ports/IEventPublisher";
 import { DEFAULT_ORGANIZATION_ID, DEFAULT_STORE_ID } from "../../../../../libs/shared/presentation/http/tenant/TenantResolver";
 
-// ── Shared instances — created once at module load, not per request ──────────
-const syncJobRepository = new PgSyncJobRepository();
-const eventPublisher = new InMemoryEventPublisher();
-
 export const ShopifySyncController = async (req: Request, res: Response): Promise<void> => {
+    // ── Shared instances — created inside function to ensure DB connection is ready ──
+    const syncJobRepository = new PgSyncJobRepository();
+    const eventPublisher = new InMemoryEventPublisher();
+
     const tenantContext = req.tenantContext;
     if (!tenantContext) {
         // Should never happen — TenantMiddleware runs before this

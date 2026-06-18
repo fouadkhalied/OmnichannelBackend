@@ -35,7 +35,7 @@ const PORT = env.PORT;
 async function bootstrap() {
     try {
         // Connect to MongoDB
-        await connectMongo();
+        //await connectMongo();
 
         // Connect to Postgres
         await connectPostgres();

@@ -3,6 +3,6 @@ import { InMemoryEventPublisher } from "../../application/ports/IEventPublisher"
 import { PgSyncJobRepository } from "../postgres/repositories/PgSyncJobRepository";
 
 export const container = {
-    syncJobRepository: new PgSyncJobRepository(),
-    eventPublisher: new InMemoryEventPublisher(),
+    get syncJobRepository() { return new PgSyncJobRepository(); },
+    get eventPublisher() { return new InMemoryEventPublisher(); },
 };
