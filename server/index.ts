@@ -28,7 +28,7 @@ import { createEnrichmentWorker } from "../src/modules/shopify/application/worke
 
 import type { TenantContext } from "@shared/domain/valueObjects/TenantContext";
 import { ShopifyGraphQLClient } from "src/modules/shopify/infrastructure/shopify/graphql/ShopifyGraphQLClient";
-import { MongoConnectorRepository } from "@shared/infrastructure/mongo/repositories/MongoConnectorRepository";
+import { PgConnectorRepository } from "../src/libs/shared/infrastructure/postgres/repositories/PgConnectorRepository";
 
 const PORT = env.PORT;
 
@@ -45,7 +45,7 @@ async function bootstrap() {
         // ── Shared infrastructure ──────────────────────────
         const stagingRepository = new PgStagingRepository();
         const syncJobRepository = new PgSyncJobRepository();
-        const connectorRepository = new MongoConnectorRepository();
+        const connectorRepository = new PgConnectorRepository();
         const shopifyClient = new ShopifyGraphQLClient();
         const knowledgeRepository = new MongoKnowledgeRepository();
         const embeddingRepository = new OpenAIEmbeddingRepository();

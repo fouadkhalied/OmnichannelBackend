@@ -4,11 +4,11 @@ import { ProcessProductWebhookUseCase } from "../../../application/useCases/webh
 import { ProcessCustomerWebhookUseCase } from "../../../application/useCases/webhook/ProcessCustomerWebhookUseCase";
 import { ProcessOrderWebhookUseCase } from "../../../application/useCases/webhook/ProcessOrderWebhookUseCase";
 import { PgStagingRepository } from "../../../infrastructure/postgres/repositories/PgStagingRepository";
-import { MongoConnectorRepository } from "../../../../../libs/shared/infrastructure/mongo/repositories/MongoConnectorRepository";
+import { PgConnectorRepository } from "../../../../../libs/shared/infrastructure/postgres/repositories/PgConnectorRepository";
+import { PgN8nInstanceRepository } from "../../../../../libs/shared/infrastructure/postgres/repositories/PgN8nInstanceRepository";
 import { ShopifyGraphQLClient } from "../../../infrastructure/shopify/graphql/ShopifyGraphQLClient";
 import { ChangeDetectionService } from "../../../domain/services/ChangeDetectionService";
 import { N8nForwardingService } from "../../../../n8n/N8nForwardingService";
-import { MongoN8nInstanceRepository } from "../../../../../libs/shared/infrastructure/mongo/repositories/MongoN8nInstanceRepository";
 import { logger } from "../../../../../libs/common/logger";
 import { requireDb } from "../../../../../libs/shared/infrastructure/postgres/PgClient";
 import { UnitOfWorkFactory } from "../../../../../libs/shared/infrastructure/postgres/unitOfWork/UnitOfWorkFactory";
@@ -23,8 +23,8 @@ const extractEntityId = (payload: any): string | null => {
 export const ShopifyWebhookController = async (req: Request, res: Response): Promise<void> => {
     // ── Shared instances — created inside function to ensure DB connection is ready ──
     const stagingRepository = new PgStagingRepository();
-    const connectorRepository = new MongoConnectorRepository();
-    const n8nRepository = new MongoN8nInstanceRepository();
+    const connectorRepository = new PgConnectorRepository();
+    const n8nRepository = new PgN8nInstanceRepository();
     const shopifyClient = new ShopifyGraphQLClient();
     const changeDetectionService = new ChangeDetectionService();
     const n8nForwardingService = new N8nForwardingService(n8nRepository);

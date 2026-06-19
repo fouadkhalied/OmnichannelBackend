@@ -15,4 +15,5 @@ export * from "./inventoryLevels";
 export * from "./refunds";
 export * from "./syncJobs";
 export * from "./webhookEvents";
+export * from "./n8nInstances";
 export * from "../../../../../modules/shopify/infrastructure/postgres/schema/stadging.schema";
