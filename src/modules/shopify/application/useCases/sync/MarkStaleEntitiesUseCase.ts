@@ -5,7 +5,7 @@ import { logger } from "../../../../../libs/common/logger";
 /**
  * After a full sync scan completes for an entity type,
  * diffs seen IDs against what's stored in Postgres and
- * marks anything missing as deleted (queues embedding worker to archive from Mongo).
+ * marks anything missing as deleted (queues embedding worker to archive from Postgres).
  *
  * Note: This is NOT a BaseService because it runs in worker context
  * without a per-tenant HTTP request. It takes no tenantContext constructor arg.

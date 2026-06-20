@@ -1,3 +1,3 @@
 import { env } from "./src/config/env";
 console.log("PORT:", env.PORT);
-console.log("MONGODB_URI:", env.MONGODB_URI ? "Present" : "Missing");
+console.log("DATABASE_URL:", env.DATABASE_URL ? "Present" : "Missing");

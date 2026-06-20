@@ -27,7 +27,6 @@ async function build() {
             external: [
                 "whatsapp-web.js",
                 "pg",
-                "mongoose",
                 "express",
                 "canvas",
                 "bufferutil",

@@ -38,7 +38,7 @@ export class GenerateEmbeddingUseCase extends BaseService {
             record.payload
         );
 
-        // ── Upsert knowledge document into Mongo ────────────────────────────
+        // ── Upsert knowledge document into Postgres ─────────────────────────
         await this.knowledgeRepository.upsert({
             tenantId: record.tenantId,
             documentId,
@@ -63,7 +63,7 @@ export class GenerateEmbeddingUseCase extends BaseService {
 
         // ── Persist embedding via knowledge repository ──────────────────────
         // IKnowledgeRepository.upsertEmbedding handles chunk-to-vector mapping.
-        // We use saveEmbedding which is the clean abstraction — no direct Mongoose here.
+        // We use saveEmbedding which is the clean abstraction — no direct legacy DB here.
         await this.knowledgeRepository.saveEmbedding({
             tenantId: record.tenantId,
             documentId,
