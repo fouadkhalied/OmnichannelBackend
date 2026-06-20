@@ -6,25 +6,27 @@ import { InitiateOauthUseCase } from "src/modules/shopify/application/useCases/o
 import { env } from "src/config/env";
 import { CompleteOauthUseCase } from "src/modules/shopify/application/useCases/oauth/CompleteOauthUseCase";
 
+import { UnitOfWorkFactory } from "@shared/infrastructure/postgres/unitOfWork/UnitOfWorkFactory";
+
 export class ShopifyOauthController {
     constructor(
-        private readonly connectorRepository: PgConnectorRepository,
+        private readonly uowFactory: UnitOfWorkFactory,
         private readonly webhookService: ShopifyWebhookRegistrationService = new ShopifyWebhookRegistrationService()
     ) { }
 
     async initiate(req: Request, res: Response): Promise<void> {
         try {
             const tenantContext = (req as any).tenantContext;
-            const { shop, clientId, clientSecret } = req.body;
+            const { shop } = req.body;
 
-            if (!shop || !clientId || !clientSecret) {
-                res.status(400).json({ error: "Missing 'shop', 'clientId', or 'clientSecret' in request body" });
+            if (!shop) {
+                res.status(400).json({ error: "Missing 'shop' in request body" });
                 return;
             }
 
             const useCase = new InitiateOauthUseCase(
                 tenantContext,
-                this.connectorRepository
+                this.uowFactory
             );
 
             const { redirectUrl } = await useCase.execute({
@@ -32,8 +34,6 @@ export class ShopifyOauthController {
                 organizationId: tenantContext.organizationId,
                 storeId: tenantContext.storeId,
                 shopDomain: shop,
-                clientId,
-                clientSecret,
                 apiVersion: "2025-01",
             });
 
@@ -42,7 +42,7 @@ export class ShopifyOauthController {
             logger.error("shopify.oauth_initiate_failed", {
                 error: error instanceof Error ? error.message : String(error),
             });
-            res.status(500).json({ error: "Failed to initiate OAuth" });
+            res.status(500).json({ error: error instanceof Error ? error.message : "Failed to initiate OAuth" });
         }
     }
 
@@ -50,7 +50,6 @@ export class ShopifyOauthController {
         try {
             const code = req.query.code as string;
             const state = req.query.state as string;
-            // The raw query is the part after ? in the URL
             const rawQuery = req.url.split("?")[1] || "";
 
             if (!code || !state) {
@@ -59,8 +58,8 @@ export class ShopifyOauthController {
             }
 
             const useCase = new CompleteOauthUseCase(
-                (req as any).tenantContext || ({} as any), // Context not initialized yet for callback
-                this.connectorRepository,
+                (req as any).tenantContext || ({} as any),
+                new PgConnectorRepository(this.uowFactory.getDb()),
                 this.webhookService
             );
 

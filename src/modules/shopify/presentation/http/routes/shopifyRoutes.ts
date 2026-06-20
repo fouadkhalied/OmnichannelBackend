@@ -27,7 +27,7 @@ export function createShopifyRouter(uowFactory: UnitOfWorkFactory): Router {
     const connectorRepository = new PgConnectorRepository(db);
     const n8nRepository = new PgN8nInstanceRepository(db);
 
-    const oauthController = new ShopifyOauthController(connectorRepository);
+    const oauthController = new ShopifyOauthController(uowFactory);
     const n8nController = new N8nInstanceController(n8nRepository);
 
     // ── Sync ──────────────────────────────────────────────────────────────────────

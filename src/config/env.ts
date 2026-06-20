@@ -38,6 +38,8 @@ const envSchema = z
     LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
     LOG_PRETTY: z.preprocess(toBoolean, z.coerce.boolean()).default(false),
     DATABASE_URL: z.string().min(1).optional(),
+    TESTING_NEON_DB: z.string().min(1).optional(),
+    TESTING_NEON_VECTOR_DB: z.string().min(1).optional(),
     REPL_ID: z.string().min(1).optional(),
     SESSION_SECRET: z.string().min(16).default("change-me-in-production-32chars!!"),
     ISSUER_URL: z.string().url().optional(),

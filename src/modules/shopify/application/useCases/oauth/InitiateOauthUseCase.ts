@@ -5,7 +5,8 @@ import {
     normalizeAndValidateShopDomain,
 } from "../../../domain/valueObjects/ShopifyOauthState";
 import crypto from "crypto";
-import { IConnectorRepository } from "../../../domain/repositories/IConnectorRepository";
+import { UnitOfWorkFactory } from "../../../../../libs/shared/infrastructure/postgres/unitOfWork/UnitOfWorkFactory";
+import { Vault } from "../../../../../libs/shared/crypto/vault";
 import { env } from "../../../../../config/env";
 import { logger } from "../../../../../libs/common/logger";
 
@@ -14,8 +15,6 @@ export interface InitiateOauthInput {
     organizationId: string;
     storeId: string;
     shopDomain: string;
-    clientId: string;
-    clientSecret: string;
     apiVersion: string;
 }
 
@@ -26,19 +25,39 @@ export interface InitiateOauthOutput {
 export class InitiateOauthUseCase extends BaseService {
     constructor(
         tenantContext: TenantContext,
-        private readonly connectorRepository: IConnectorRepository,
+        private readonly uowFactory: UnitOfWorkFactory,
     ) {
         super(tenantContext);
     }
 
     async execute(input: InitiateOauthInput): Promise<InitiateOauthOutput> {
-        // 1. Normalize and validate shop domain
+        // 1. Fetch Tenant Infrastructure Credentials
+        const tenantId = this.tenantContext.tenantId;
+        const tenantInfra = await this.uowFactory.execute(async (uow) => {
+            return await uow.tenantN8n.findById(tenantId!);
+        });
+
+        if (!tenantInfra || !tenantInfra.shopifyAppClientIdEncrypted || !tenantInfra.shopifyAppClientSecretEncrypted) {
+            throw new Error(`Shopify App credentials not found for tenant ${tenantId}. Please register them first.`);
+        }
+
+        // 2. Decrypt Credentials
+        const clientId = Vault.decrypt({
+            ciphertext: tenantInfra.shopifyAppClientIdEncrypted!,
+            iv: tenantInfra.iv
+        });
+        const clientSecret = Vault.decrypt({
+            ciphertext: tenantInfra.shopifyAppClientSecretEncrypted!,
+            iv: tenantInfra.iv
+        });
+
+        // 3. Normalize and validate shop domain
         const normalizedShop = normalizeAndValidateShopDomain(input.shopDomain);
 
-        // 2. Build ShopifyOauthStatePayload
+        // 4. Build ShopifyOauthStatePayload
         const nonce = crypto.randomBytes(16).toString("hex");
         const now = Date.now();
-        const ttl = env.SHOPIFY_OAUTH_STATE_TTL_MS;
+        const ttl = Number(env.SHOPIFY_OAUTH_STATE_TTL_MS) || 3600000;
 
         const stateToken = createSignedShopifyOauthState(
             {
@@ -46,8 +65,8 @@ export class InitiateOauthUseCase extends BaseService {
                 organizationId: input.organizationId,
                 storeId: input.storeId,
                 shopDomain: normalizedShop,
-                clientId: input.clientId,
-                clientSecret: input.clientSecret,
+                clientId: clientId,
+                clientSecret: clientSecret,
                 apiVersion: input.apiVersion,
                 nonce,
                 iat: now,
@@ -56,7 +75,7 @@ export class InitiateOauthUseCase extends BaseService {
             env.SHOPIFY_OAUTH_STATE_SECRET || "dev-state-secret-change-me",
         );
 
-        // 3. Build Shopify auth URL
+        // 5. Build Shopify auth URL
         // https://{shopDomain}/admin/oauth/authorize
         //   ?client_id={SHOPIFY_APP_CLIENT_ID}
         //   &scope={SHOPIFY_OAUTH_SCOPES}
@@ -64,7 +83,6 @@ export class InitiateOauthUseCase extends BaseService {
         //   &state={signedState}
 
         const scopes = env.SHOPIFY_OAUTH_SCOPES;
-        const clientId = input.clientId;
         const redirectUri = `${env.API_BASE_URL}/api/shopify/oauth/callback`;
         const redirectUrl = `https://${normalizedShop}/admin/oauth/authorize?client_id=${clientId}&scope=${encodeURIComponent(scopes)}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${stateToken}`;
 

@@ -1,0 +1,556 @@
+{
+    "name": "Shopify Ingestion — {{TENANT_ID}}",
+    "nodes": [
+        {
+            "id": "node-webhook-trigger",
+            "name": "Shopify Webhook",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 2,
+            "position": [
+                200,
+                300
+            ],
+            "webhookId": "shopify-products-{{TENANT_ID}}",
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "shopify-products",
+                "responseMode": "responseNode",
+                "options": {
+                    "rawBody": true
+                }
+            }
+        },
+        {
+            "id": "node-schedule-trigger",
+            "name": "Full Sync Schedule",
+            "type": "n8n-nodes-base.scheduleTrigger",
+            "typeVersion": 1.2,
+            "position": [
+                200,
+                500
+            ],
+            "parameters": {
+                "rule": {
+                    "interval": [
+                        {
+                            "field": "cronExpression",
+                            "expression": "0 2 * * *"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "id": "node-manual-trigger",
+            "name": "Manual Full Sync",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 2,
+            "position": [
+                200,
+                700
+            ],
+            "webhookId": "manual-sync-{{TENANT_ID}}",
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "manual-sync",
+                "responseMode": "responseNode",
+                "options": {}
+            }
+        },
+        {
+            "id": "node-route-entry",
+            "name": "Route Entry Point",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2,
+            "position": [
+                440,
+                400
+            ],
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": false,
+                        "leftValue": "",
+                        "typeValidation": "loose"
+                    },
+                    "conditions": [
+                        {
+                            "id": "cond-is-webhook",
+                            "leftValue": "={{ $json.headers['x-shopify-hmac-sha256'] }}",
+                            "rightValue": "",
+                            "operator": {
+                                "type": "string",
+                                "operation": "exists"
+                            }
+                        }
+                    ],
+                    "combinator": "and"
+                },
+                "options": {}
+            }
+        },
+        {
+            "id": "node-hmac-verify",
+            "name": "HMAC Verification",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                680,
+                280
+            ],
+            "parameters": {
+                "jsCode": "const crypto = require('crypto');\nconst rawBody = $input.first().binary?.data ?? $input.first().json?.rawBody ?? JSON.stringify($input.first().json.body);\nconst shopifySignature = $input.first().json.headers?.['x-shopify-hmac-sha256'];\nconst topic = $input.first().json.headers?.['x-shopify-topic'];\n\nif (!shopifySignature) throw new Error('Missing HMAC signature header');\nconst appSecret = $env.SHOPIFY_WEBHOOK_SECRET;\nif (!appSecret) throw new Error('SHOPIFY_WEBHOOK_SECRET env var not set');\n\nconst computed = crypto.createHmac('sha256', appSecret).update(rawBody, 'utf8').digest('base64');\n\nif (shopifySignature !== computed) throw new Error('HMAC verification failed');\n\nreturn [{ json: { verified: true, mode: 'webhook', topic, product: $input.first().json.body } }];"
+            }
+        },
+        {
+            "id": "node-init-fullsync",
+            "name": "Init Full Sync State",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                680,
+                580
+            ],
+            "parameters": {
+                "jsCode": "return [{ json: { mode: 'full_sync', next_page_url: null, page: 1, total_fetched: 0 } }];"
+            }
+        },
+        {
+            "id": "node-route-topic",
+            "name": "Route by Topic",
+            "type": "n8n-nodes-base.switch",
+            "typeVersion": 3,
+            "position": [
+                950,
+                280
+            ],
+            "parameters": {
+                "mode": "expression",
+                "output": "={{ $json.topic === 'products/delete' ? 0 : 1 }}",
+                "options": {}
+            }
+        },
+        {
+            "id": "node-fetch-page",
+            "name": "Fetch Products Page",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [
+                1200,
+                580
+            ],
+            "credentials": {
+                "httpHeaderAuth": {
+                    "id": "{{SHOPIFY_CREDENTIAL_ID}}",
+                    "name": "shopify-{{TENANT_ID}}"
+                }
+            },
+            "parameters": {
+                "method": "GET",
+                "url": "=https://{{SHOP_DOMAIN}}/admin/api/2024-01/products.json",
+                "sendQuery": true,
+                "queryParameters": {
+                    "parameters": [
+                        {
+                            "name": "limit",
+                            "value": "250"
+                        },
+                        {
+                            "name": "fields",
+                            "value": "id,title,body_html,handle,status,variants,images,updated_at"
+                        }
+                    ]
+                },
+                "options": {
+                    "response": {
+                        "response": {
+                            "fullResponse": true
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "id": "node-parse-pagination",
+            "name": "Parse Pagination",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1440,
+                580
+            ],
+            "parameters": {
+                "jsCode": "const response = $input.first().json;\nconst linkHeader = response.headers?.link || '';\nconst nextMatch = linkHeader.match(/<[^>]*[?&]page_info=([^&>]+)[^>]*>;\\s*rel=\"next\"/);\nconst nextCursor = nextMatch ? nextMatch[1] : null;\nconst products = response.body?.products || [];\nreturn [{ json: { products, next_cursor: nextCursor, has_next_page: !!nextCursor } }];"
+            }
+        },
+        {
+            "id": "node-split-products",
+            "name": "Split Products",
+            "type": "n8n-nodes-base.splitInBatches",
+            "typeVersion": 3,
+            "position": [
+                1680,
+                580
+            ],
+            "parameters": {
+                "batchSize": 1,
+                "options": {}
+            }
+        },
+        {
+            "id": "node-filter-active",
+            "name": "Filter Active",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2,
+            "position": [
+                1920,
+                580
+            ],
+            "parameters": {
+                "conditions": {
+                    "conditions": [
+                        {
+                            "leftValue": "={{ $json.status }}",
+                            "rightValue": "active",
+                            "operator": {
+                                "type": "string",
+                                "operation": "equals"
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "id": "node-check-neon-existing",
+            "name": "Check Neon Existing",
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.5,
+            "position": [
+                2160,
+                480
+            ],
+            "credentials": {
+                "postgres": {
+                    "id": "{{POSTGRES_CREDENTIAL_ID}}",
+                    "name": "neon-{{TENANT_ID}}"
+                }
+            },
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "SELECT id FROM documents WHERE (metadata->>'product_id')::bigint = $1 LIMIT 1;",
+                "queryParams": "={{ $json.id }}"
+            }
+        },
+        {
+            "id": "node-check-stale",
+            "name": "Is Stale?",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2,
+            "position": [
+                2400,
+                480
+            ],
+            "parameters": {
+                "conditions": {
+                    "conditions": [
+                        {
+                            "leftValue": "={{ $node['Check Neon Existing'].json.id }}",
+                            "operator": {
+                                "type": "string",
+                                "operation": "isEmpty"
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "id": "node-clean-chunk",
+            "name": "Clean and Chunk",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                2640,
+                400
+            ],
+            "parameters": {
+                "jsCode": "const product = $('Filter Active').item.json;\nconst description = (product.body_html || '').replace(/<[^>]*>/g, ' ').trim();\nconst text = `Product: ${product.title}\\nDescription: ${description}\\nHandle: ${product.handle}`;\nreturn [{ json: { text, product_id: product.id, title: product.title, handle: product.handle, updated_at: product.updated_at } }];"
+            }
+        },
+        {
+            "id": "node-embed",
+            "name": "Generate Embeddings",
+            "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+            "typeVersion": 1.2,
+            "position": [
+                2880,
+                400
+            ],
+            "credentials": {
+                "openAiApi": {
+                    "id": "{{OPENAI_CREDENTIAL_ID}}",
+                    "name": "openai-{{TENANT_ID}}"
+                }
+            },
+            "parameters": {
+                "model": "text-embedding-3-small"
+            }
+        },
+        {
+            "id": "node-upsert-neon",
+            "name": "Upsert to Neon",
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.5,
+            "position": [
+                3120,
+                400
+            ],
+            "credentials": {
+                "postgres": {
+                    "id": "{{POSTGRES_CREDENTIAL_ID}}",
+                    "name": "neon-{{TENANT_ID}}"
+                }
+            },
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "INSERT INTO documents (content, metadata, embedding) VALUES ($1, $2, $3::vector);",
+                "queryParams": "={{ $json.text }}, {{ JSON.stringify({ product_id: $json.product_id, title: $json.title, handle: $json.handle, updated_at: $json.updated_at }) }}, {{ JSON.stringify($json.embedding) }}"
+            }
+        },
+        {
+            "id": "node-delete-neon",
+            "name": "Delete from Neon",
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.5,
+            "position": [
+                1200,
+                280
+            ],
+            "credentials": {
+                "postgres": {
+                    "id": "{{POSTGRES_CREDENTIAL_ID}}",
+                    "name": "neon-{{TENANT_ID}}"
+                }
+            },
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "DELETE FROM documents WHERE (metadata->>'product_id')::bigint = $1;",
+                "queryParams": "={{ $json.product.id }}"
+            }
+        },
+        {
+            "id": "node-check-next",
+            "name": "Has Next?",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2,
+            "position": [
+                1680,
+                760
+            ],
+            "parameters": {
+                "conditions": {
+                    "conditions": [
+                        {
+                            "leftValue": "={{ $json.has_next_page }}",
+                            "rightValue": true,
+                            "operator": {
+                                "type": "boolean",
+                                "operation": "true"
+                            }
+                        }
+                    ]
+                }
+            }
+        }
+    ],
+    "connections": {
+        "Shopify Webhook": {
+            "main": [
+                [
+                    {
+                        "node": "Route Entry Point",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Full Sync Schedule": {
+            "main": [
+                [
+                    {
+                        "node": "Init Full Sync State",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Manual Full Sync": {
+            "main": [
+                [
+                    {
+                        "node": "Init Full Sync State",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Route Entry Point": {
+            "main": [
+                [
+                    {
+                        "node": "HMAC Verification",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Init Full Sync State",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "HMAC Verification": {
+            "main": [
+                [
+                    {
+                        "node": "Route by Topic",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Init Full Sync State": {
+            "main": [
+                [
+                    {
+                        "node": "Fetch Products Page",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Route by Topic": {
+            "main": [
+                [
+                    {
+                        "node": "Delete from Neon",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Clean and Chunk",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Fetch Products Page": {
+            "main": [
+                [
+                    {
+                        "node": "Parse Pagination",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Parse Pagination": {
+            "main": [
+                [
+                    {
+                        "node": "Split Products",
+                        "type": "main",
+                        "index": 0
+                    },
+                    {
+                        "node": "Check Next",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Split Products": {
+            "main": [
+                [
+                    {
+                        "node": "Filter Active",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Filter Active": {
+            "main": [
+                [
+                    {
+                        "node": "Check Neon Existing",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Check Neon Existing": {
+            "main": [
+                [
+                    {
+                        "node": "Is Stale?",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Is Stale?": {
+            "main": [
+                [
+                    {
+                        "node": "Clean and Chunk",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Clean and Chunk": {
+            "main": [
+                [
+                    {
+                        "node": "Generate Embeddings",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Generate Embeddings": {
+            "main": [
+                [
+                    {
+                        "node": "Upsert to Neon",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "settings": {
+        "executionOrder": "v1"
+    }
+}

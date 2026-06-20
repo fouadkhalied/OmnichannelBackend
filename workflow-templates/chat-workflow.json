@@ -1,0 +1,208 @@
+{
+    "name": "Shopify Chat — {{TENANT_ID}}",
+    "nodes": [
+        {
+            "id": "node-chat-webhook",
+            "name": "Chat Webhook",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 2,
+            "position": [
+                200,
+                400
+            ],
+            "webhookId": "chat-{{TENANT_ID}}",
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "chat",
+                "responseMode": "responseNode",
+                "options": {}
+            }
+        },
+        {
+            "id": "node-validate",
+            "name": "Validate Request",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                440,
+                400
+            ],
+            "parameters": {
+                "jsCode": "const body = $input.first().json.body;\nif (!body.message) throw new Error('Missing message');\nreturn [{ json: { message: body.message, session_id: body.session_id || 'default' } }];"
+            }
+        },
+        {
+            "id": "node-embed",
+            "name": "Embed Query",
+            "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+            "typeVersion": 1.2,
+            "position": [
+                680,
+                400
+            ],
+            "credentials": {
+                "openAiApi": {
+                    "id": "{{OPENAI_CREDENTIAL_ID}}",
+                    "name": "openai-{{TENANT_ID}}"
+                }
+            },
+            "parameters": {
+                "model": "text-embedding-3-small"
+            }
+        },
+        {
+            "id": "node-neon-search",
+            "name": "Postgres Search",
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.5,
+            "position": [
+                920,
+                400
+            ],
+            "credentials": {
+                "postgres": {
+                    "id": "{{POSTGRES_CREDENTIAL_ID}}",
+                    "name": "neon-{{TENANT_ID}}"
+                }
+            },
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "SELECT content, metadata, 1 - (embedding <=> $1::vector) as score FROM documents ORDER BY score DESC LIMIT 5;",
+                "queryParams": "={{ JSON.stringify($json.embedding) }}"
+            }
+        },
+        {
+            "id": "node-build-context",
+            "name": "Build Context",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1160,
+                400
+            ],
+            "parameters": {
+                "jsCode": "const results = $input.all();\nconst context = results.map(r => r.json.content).join('\\n---\\n');\nreturn [{ json: { context, message: $('Validate Request').item.json.message } }];"
+            }
+        },
+        {
+            "id": "node-llm",
+            "name": "LLM — Generate",
+            "type": "@n8n/n8n-nodes-langchain.openAi",
+            "typeVersion": 1.4,
+            "position": [
+                1400,
+                400
+            ],
+            "credentials": {
+                "openAiApi": {
+                    "id": "{{OPENAI_CREDENTIAL_ID}}",
+                    "name": "openai-{{TENANT_ID}}"
+                }
+            },
+            "parameters": {
+                "resource": "chat",
+                "model": "gpt-4o-mini",
+                "messages": {
+                    "values": [
+                        {
+                            "role": "system",
+                            "content": "You are a helpful assistant. Use the following context to answer:\\n\\n{{ $json.context }}"
+                        },
+                        {
+                            "role": "user",
+                            "content": "={{ $json.message }}"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "id": "node-respond",
+            "name": "Respond",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1.1,
+            "position": [
+                1640,
+                400
+            ],
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={ \"reply\": {{ JSON.stringify($json.message.content) }} }",
+                "options": {
+                    "responseCode": 200
+                }
+            }
+        }
+    ],
+    "connections": {
+        "Chat Webhook": {
+            "main": [
+                [
+                    {
+                        "node": "Validate Request",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Validate Request": {
+            "main": [
+                [
+                    {
+                        "node": "Embed Query",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Embed Query": {
+            "main": [
+                [
+                    {
+                        "node": "Postgres Search",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Postgres Search": {
+            "main": [
+                [
+                    {
+                        "node": "Build Context",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Build Context": {
+            "main": [
+                [
+                    {
+                        "node": "LLM — Generate",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "LLM — Generate": {
+            "main": [
+                [
+                    {
+                        "node": "Respond",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "settings": {
+        "executionOrder": "v1"
+    }
+}
