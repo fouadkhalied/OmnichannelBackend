@@ -1,85 +1,96 @@
 import { Router } from "express";
 import { ShopifySyncController } from "../controllers/ShopifySyncController";
 import { ShopifyWebhookController } from "../controllers/ShopifyWebhookController";
-
-// Shared Middlewares
-import { LoggerMiddleware } from "../../../../../libs/shared/presentation/http/middleware/foundational/LoggerMiddleware";
-import { RateLimiterMiddleware } from "../../../../../libs/shared/presentation/http/middleware/security/RateLimiterMiddleware";
-import { AuthMiddleware } from "../../../../../libs/shared/presentation/http/middleware/security/AuthMiddleware";
-import { TenantMiddleware } from "../../../../../libs/shared/presentation/http/middleware/security/TenantMiddleware";
-import { PlanGuardMiddleware } from "../../../../../libs/shared/presentation/http/middleware/security/PlanGuardMiddleware";
-import { ValidationMiddleware } from "../../../../../libs/shared/presentation/http/middleware/validation/ValidationMiddleware";
-import { SanitizationMiddleware } from "../../../../../libs/shared/presentation/http/middleware/validation/SanitizationMiddleware";
-import { IdempotencyMiddleware } from "../../../../../libs/shared/presentation/http/middleware/reliability/IdempotencyMiddleware";
-import { AuditMiddleware } from "../../../../../libs/shared/presentation/http/middleware/audit/AuditMiddleware";
-import { WebhookShopDomainMiddleware } from "../../../../../libs/shared/presentation/http/middleware/security/WebhookShopDomainMiddleware";
+import { PgConnectorRepository } from "@shared/infrastructure/postgres/repositories/PgConnectorRepository";
+import { PgN8nInstanceRepository } from "@shared/infrastructure/postgres/repositories/PgN8nInstanceRepository";
 import { ShopifyOauthController } from "../controllers/ShopifyOauthController";
 import { N8nInstanceController } from "../controllers/N8nInstanceController";
+import { UnitOfWorkFactory } from "@shared/infrastructure/postgres/unitOfWork/UnitOfWorkFactory";
 import { z } from "zod";
 
-const router = Router();
-const oauthController = new ShopifyOauthController();
-const n8nController = new N8nInstanceController();
+// Shared Middlewares
+import { LoggerMiddleware } from "@shared/presentation/http/middleware/foundational/LoggerMiddleware";
+import { RateLimiterMiddleware } from "@shared/presentation/http/middleware/security/RateLimiterMiddleware";
+import { AuthMiddleware } from "@shared/presentation/http/middleware/security/AuthMiddleware";
+import { TenantMiddleware } from "@shared/presentation/http/middleware/security/TenantMiddleware";
+import { PlanGuardMiddleware } from "@shared/presentation/http/middleware/security/PlanGuardMiddleware";
+import { ValidationMiddleware } from "@shared/presentation/http/middleware/validation/ValidationMiddleware";
+import { SanitizationMiddleware } from "@shared/presentation/http/middleware/validation/SanitizationMiddleware";
+import { IdempotencyMiddleware } from "@shared/presentation/http/middleware/reliability/IdempotencyMiddleware";
+import { AuditMiddleware } from "@shared/presentation/http/middleware/audit/AuditMiddleware";
+import { WebhookShopDomainMiddleware } from "@shared/presentation/http/middleware/security/WebhookShopDomainMiddleware";
 
-// ── Sync ──────────────────────────────────────────────────────────────────────
-router.post(
-    "/sync",
-    AuthMiddleware,
-    TenantMiddleware,
-    LoggerMiddleware,
-    RateLimiterMiddleware,
-    PlanGuardMiddleware("free"),
-    ValidationMiddleware(
-        z.object({
-            body: z.object({
-                action: z.enum(["full", "retry_failed"]).optional().default("full"),
-            }),
-        })
-    ),
-    SanitizationMiddleware,
-    IdempotencyMiddleware,
-    AuditMiddleware,
-    ShopifySyncController
-);
+export function createShopifyRouter(uowFactory: UnitOfWorkFactory): Router {
+    const router = Router();
+    const db = uowFactory.getDb();
 
-// ── Webhooks ──────────────────────────────────────────────────────────────────
-// Uses WebhookShopDomainMiddleware which does HMAC verification + Tenant resolution in one step
-router.post(
-    "/webhook",
-    LoggerMiddleware,
-    WebhookShopDomainMiddleware,
-    ShopifyWebhookController
-);
+    const connectorRepository = new PgConnectorRepository(db);
+    const n8nRepository = new PgN8nInstanceRepository(db);
 
-// ── OAuth Flow ────────────────────────────────────────────────────────────────
-router.post(
-    "/oauth/initiate",
-    AuthMiddleware,
-    TenantMiddleware,
-    LoggerMiddleware,
-    RateLimiterMiddleware,
-    oauthController.initiate.bind(oauthController)
-);
+    const oauthController = new ShopifyOauthController(connectorRepository);
+    const n8nController = new N8nInstanceController(n8nRepository);
 
-router.get(
-    "/oauth/callback",
-    LoggerMiddleware,
-    oauthController.callback.bind(oauthController)
-);
+    // ── Sync ──────────────────────────────────────────────────────────────────────
+    router.post(
+        "/sync",
+        AuthMiddleware,
+        TenantMiddleware,
+        LoggerMiddleware,
+        RateLimiterMiddleware,
+        PlanGuardMiddleware("free"),
+        ValidationMiddleware(
+            z.object({
+                body: z.object({
+                    action: z.enum(["full", "retry_failed"]).optional().default("full"),
+                }),
+            })
+        ),
+        SanitizationMiddleware,
+        IdempotencyMiddleware,
+        AuditMiddleware,
+        ShopifySyncController
+    );
 
-// ── n8n Instance ─────────────────────────────────────────────────────────────
-router.post(
-    "/n8n/instance",
-    AuthMiddleware,
-    TenantMiddleware,
-    n8nController.register.bind(n8nController)
-);
+    // ── Webhooks ──────────────────────────────────────────────────────────────────
+    router.post(
+        "/webhook",
+        LoggerMiddleware,
+        WebhookShopDomainMiddleware,
+        ShopifyWebhookController
+    );
 
-router.get(
-    "/n8n/instance",
-    AuthMiddleware,
-    TenantMiddleware,
-    n8nController.getInstance.bind(n8nController)
-);
+    // ── OAuth Flow ────────────────────────────────────────────────────────────────
+    router.post(
+        "/oauth/initiate",
+        AuthMiddleware,
+        TenantMiddleware,
+        LoggerMiddleware,
+        RateLimiterMiddleware,
+        oauthController.initiate.bind(oauthController)
+    );
 
-export default router;
+    router.get(
+        "/oauth/callback",
+        LoggerMiddleware,
+        oauthController.callback.bind(oauthController)
+    );
+
+    // ── n8n Instance ─────────────────────────────────────────────────────────────
+    router.post(
+        "/n8n/instance",
+        AuthMiddleware,
+        TenantMiddleware,
+        n8nController.register.bind(n8nController)
+    );
+
+    router.get(
+        "/n8n/instance",
+        AuthMiddleware,
+        TenantMiddleware,
+        n8nController.getInstance.bind(n8nController)
+    );
+
+    return router;
+}
+
+export default createShopifyRouter;

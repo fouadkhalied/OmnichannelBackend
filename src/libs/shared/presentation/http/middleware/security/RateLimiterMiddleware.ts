@@ -7,7 +7,7 @@ const store = new RateLimiterStore();
 export const RateLimiterMiddleware = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const ip = req.ip || "unknown";
-        const tenantId = req.tenantContext?.organizationId || "global";
+        const tenantId = req.tenantContext!.organizationId;
         const key = `ratelimit:${ip}:${tenantId}`;
 
         const count = await store.increment(key, 60);

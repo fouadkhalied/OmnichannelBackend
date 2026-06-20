@@ -12,7 +12,7 @@ export function createApiRouter(uowFactory: UnitOfWorkFactory): Router {
     });
 
     // Module Routes
-    router.use("/shopify", shopifyRoutes);
+    router.use("/shopify", shopifyRoutes(uowFactory));
     router.use("/auth", createAuthRouter(uowFactory));
 
     return router;

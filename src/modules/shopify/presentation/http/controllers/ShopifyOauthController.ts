@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { PgConnectorRepository } from "../../../../../libs/shared/infrastructure/postgres/repositories/PgConnectorRepository";
+import { PgConnectorRepository } from "@shared/infrastructure/postgres/repositories/PgConnectorRepository";
 import { logger } from "../../../../../libs/common/logger";
 import { ShopifyWebhookRegistrationService } from "src/modules/shopify/domain/services/ShopifyWebhookRegistrationService";
 import { InitiateOauthUseCase } from "src/modules/shopify/application/useCases/oauth/InitiateOauthUseCase";
@@ -7,8 +7,10 @@ import { env } from "src/config/env";
 import { CompleteOauthUseCase } from "src/modules/shopify/application/useCases/oauth/CompleteOauthUseCase";
 
 export class ShopifyOauthController {
-    private readonly connectorRepository = new PgConnectorRepository();
-    private readonly webhookService = new ShopifyWebhookRegistrationService();
+    constructor(
+        private readonly connectorRepository: PgConnectorRepository,
+        private readonly webhookService: ShopifyWebhookRegistrationService = new ShopifyWebhookRegistrationService()
+    ) { }
 
     async initiate(req: Request, res: Response): Promise<void> {
         try {

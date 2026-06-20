@@ -1,10 +1,10 @@
 import { Request, Response } from "express";
-import { PgN8nInstanceRepository } from "../../../../../libs/shared/infrastructure/postgres/repositories/PgN8nInstanceRepository";
+import { PgN8nInstanceRepository } from "@shared/infrastructure/postgres/repositories/PgN8nInstanceRepository";
 import { RegisterN8nInstanceUseCase } from "../../../../n8n/application/useCases/RegisterN8nInstanceUseCase";
 import { logger } from "../../../../../libs/common/logger";
 
 export class N8nInstanceController {
-    private readonly n8nRepository = new PgN8nInstanceRepository();
+    constructor(private readonly n8nRepository: PgN8nInstanceRepository) { }
 
     async getInstance(req: Request, res: Response): Promise<void> {
         try {

@@ -1,6 +1,5 @@
 import { eq, and } from "drizzle-orm";
 import { logger } from "../../../../../libs/common/logger";
-import { requireDb } from "../PgClient";
 import { connectorCredentials, ConnectorCredential } from "../schema/connectorCredentials";
 import {
     IConnectorRepository,
@@ -21,7 +20,7 @@ function splitTenantId(tenantId: string): { organizationId: string; storeId: str
 export class PgConnectorRepository implements IConnectorRepository {
     private readonly secret = process.env.CONNECTOR_ENCRYPTION_SECRET;
 
-    constructor(private readonly db: any = requireDb()) { }
+    constructor(private readonly db: any) { }
 
     async getCredentials(tenantId: string): Promise<ShopifyCredentials> {
         const { organizationId, storeId } = splitTenantId(tenantId);

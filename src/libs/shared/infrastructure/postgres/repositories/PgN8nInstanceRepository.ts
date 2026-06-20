@@ -1,13 +1,12 @@
 import { eq } from "drizzle-orm";
-import { requireDb } from "../PgClient";
-import { n8nInstances, N8nInstance as N8nInstanceRow } from "../schema/n8nInstances";
+import { n8nInstances } from "../schema/n8nInstances";
 import {
     IN8nInstanceRepository,
     N8nInstance,
 } from "src/modules/shopify/domain/repositories/IN8nInstanceRepository";
 
 export class PgN8nInstanceRepository implements IN8nInstanceRepository {
-    constructor(private readonly db: any = requireDb()) { }
+    constructor(private readonly db: any) { }
 
     async findByOrganizationId(organizationId: string): Promise<N8nInstance | null> {
         const [row] = await this.db

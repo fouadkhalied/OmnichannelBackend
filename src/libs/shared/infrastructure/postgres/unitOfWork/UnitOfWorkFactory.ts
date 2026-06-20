@@ -15,6 +15,10 @@ import { PgUserWorkspaceRepository } from "../repositories/PgUserWorkspaceReposi
 export class UnitOfWorkFactory {
     constructor(private readonly db: any) { } // Injected db instance from PgClient
 
+    getDb() {
+        return this.db;
+    }
+
     async execute<T>(
         work: (uow: IUnitOfWork) => Promise<T>
     ): Promise<T> {
