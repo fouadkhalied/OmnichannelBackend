@@ -53,6 +53,26 @@ export class N8nClient {
         }
     }
 
+    async updateCredential(apiKey: string, credentialId: string, data: any): Promise<void> {
+        try {
+            const response = await fetch(`${this.baseUrl}/api/v1/credentials/${credentialId}`, {
+                method: "PUT",
+                headers: {
+                    "X-N8N-API-KEY": apiKey,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(data)
+            });
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(`n8n credential update failed: ${JSON.stringify(errorData)}`);
+            }
+        } catch (err) {
+            logger.error("n8n.update_credential_failed", { credentialId, error: String(err) });
+            throw err;
+        }
+    }
+
     async deployWorkflow(apiKey: string, workflowJson: any): Promise<string> {
         try {
             const response = await fetch(`${this.baseUrl}/api/v1/workflows`, {

@@ -11,6 +11,10 @@ import { UnauthorizedError } from "../../../../../libs/shared/domain/errors/Unau
 import crypto from "crypto";
 import { env } from "../../../../../config/env";
 
+import { UnitOfWorkFactory } from "../../../../../libs/shared/infrastructure/postgres/unitOfWork/UnitOfWorkFactory";
+import { N8nClient } from "../../../../../libs/shared/infrastructure/external/N8nClient";
+import { Vault } from "../../../../../libs/shared/crypto/vault";
+
 export interface CompleteOauthInput {
     code: string;
     state: string;
@@ -27,7 +31,7 @@ export interface CompleteOauthOutput {
 export class CompleteOauthUseCase extends BaseService {
     constructor(
         tenantContext: TenantContext,
-        private readonly connectorRepository: IConnectorRepository,
+        private readonly uowFactory: UnitOfWorkFactory,
         private readonly webhookService: ShopifyWebhookRegistrationService,
     ) {
         super(tenantContext);
@@ -91,26 +95,56 @@ export class CompleteOauthUseCase extends BaseService {
         // 4. Use the custom Client Secret from the OAuth initiation for webhooks
         const webhookSecret = clientSecret;
 
-        // 5. Save credentials
-        await this.connectorRepository.upsertCredentials({
-            organizationId,
-            storeId,
-            shopDomain: actualShopDomain,
-            accessToken: access_token,
-            clientId,
-            clientSecret,
-            apiVersion,
-            webhookSecret,
-            scopes: scope,
-        });
+        // 5. Save credentials and Sync
+        await this.uowFactory.execute(async (uow) => {
+            // Save official Shopify credentials for the backend
+            await uow.credentials.upsert({
+                organizationId,
+                storeId,
+                shopDomain: actualShopDomain,
+                provider: "shopify",
+                clientId,
+                apiVersion,
+                scopes: scope,
+                encryptedCredentials: JSON.stringify({
+                    accessToken: access_token,
+                    clientSecret,
+                    webhookSecret,
+                    scopes: scope,
+                }),
+                status: "active",
+                updatedAt: new Date(),
+            });
 
-        // 6. Register webhooks
-        await this.webhookService.registerWebhooks({
-            shopDomain: actualShopDomain,
-            accessToken: access_token,
-            webhookSecret,
-            organizationId,
-            storeId,
+            // 6. Register webhooks (Backend directly calls Shopify)
+            await this.webhookService.registerWebhooks({
+                shopDomain: actualShopDomain,
+                accessToken: access_token,
+                webhookSecret,
+                organizationId,
+                storeId,
+            });
+
+            // 7. Update n8n Infrastructure
+            const tenantN8n = await uow.tenantN8n.findByTenantId(organizationId); // Assuming organizationId is tenantId
+            if (tenantN8n) {
+                const n8n = new N8nClient(tenantN8n.n8nBaseUrl!);
+                const n8nApiKey = Vault.decrypt({ ciphertext: tenantN8n.n8nApiKeyEncrypted!, iv: tenantN8n.iv });
+
+                // Update the Shopify credential in n8n (from PENDING_OAUTH to real token)
+                if (tenantN8n.n8nShopifyCredentialId) {
+                    await n8n.updateCredential(n8nApiKey, tenantN8n.n8nShopifyCredentialId, {
+                        name: `shopify-${organizationId}`,
+                        type: "httpHeaderAuth",
+                        data: { name: "X-Shopify-Access-Token", value: access_token }
+                    });
+                }
+
+                // Trigger Initial Sync in n8n
+                if (tenantN8n.n8nIngestionWorkflowId) {
+                    await n8n.runWorkflow(n8nApiKey, tenantN8n.n8nIngestionWorkflowId, { mode: "full_sync" });
+                }
+            }
         });
 
         return {

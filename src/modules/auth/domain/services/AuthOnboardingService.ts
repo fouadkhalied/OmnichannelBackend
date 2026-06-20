@@ -10,21 +10,20 @@ import { ShopifyClient } from "../../../../libs/shared/infrastructure/external/S
 import { HuggingFaceClient } from "../../../../libs/shared/infrastructure/external/HuggingFaceClient";
 import { N8nClient } from "../../../../libs/shared/infrastructure/external/N8nClient";
 
+import { TenantPlan } from "../../../../libs/shared/domain/valueObjects/TenantContext";
+
 export interface OnboardingData {
     companyName: string;
     adminEmail: string;
     adminPassword: string;
     shopDomain: string;
-    shopifyAccessToken: string;
     shopifyAppClientId: string;
     shopifyAppClientSecret: string;
-    plan?: string;
-
-    // Per-tenant secrets provided in the request
     neonConnectionString: string;
     openaiApiKey: string;
     hfToken: string;
     hfUsername: string;
+    plan?: TenantPlan;
 }
 
 export class AuthOnboardingService {
@@ -35,12 +34,11 @@ export class AuthOnboardingService {
         data: OnboardingData,
         onProgress: (status: string) => void
     ) {
-        onProgress("Starting onboarding: Validating Shopify credentials...");
+        onProgress("Starting onboarding: Validating domain...");
 
         // 1 & 2: Validation
-        const isShopifyValid = await this.shopify.validateToken(data.shopDomain, data.shopifyAccessToken);
-        if (!isShopifyValid) {
-            throw new Error("Invalid Shopify access token or domain.");
+        if (!data.shopDomain.endsWith(".myshopify.com")) {
+            throw new Error("Invalid Shopify store domain. Must be {shop}.myshopify.com");
         }
 
         const hfClient = new HuggingFaceClient(data.hfUsername);
@@ -115,7 +113,7 @@ export class AuthOnboardingService {
         const shopifyCredId = await n8n.createCredential(n8nApiKey, {
             name: `shopify-${tenantId}`,
             type: "httpHeaderAuth",
-            data: { name: "X-Shopify-Access-Token", value: data.shopifyAccessToken }
+            data: { name: "X-Shopify-Access-Token", value: "PENDING_OAUTH" }
         });
 
         const openaiCredId = await n8n.createCredential(n8nApiKey, {
@@ -172,21 +170,8 @@ export class AuthOnboardingService {
             workflowIds[template.label.toLowerCase()] = workflowId;
         }
 
-        // 10: Register Shopify Webhooks
-        onProgress("Registering Shopify webhooks...");
-        const topics = ["products/create", "products/update", "products/delete", "app/uninstalled"];
-        for (const topic of topics) {
-            await this.shopify.registerWebhook(
-                data.shopDomain,
-                data.shopifyAccessToken,
-                topic,
-                `${n8nBaseUrl}/webhook/shopify-${topic.replace('/', '-')}-${tenantId}`
-            );
-        }
-
-        // 11: Trigger Initial Sync
-        onProgress("Triggering initial product sync...");
-        await n8n.runWorkflow(n8nApiKey, workflowIds['ingestion'], { mode: "full_sync" });
+        // 10 & 11: Infrastructure setup complete (Awaiting Shopify Connection)
+        onProgress("Infrastructure setup complete (Awaiting Shopify Connection)...");
 
         // 12: Final State Persistence
         onProgress("Finalizing tenant registration...");
@@ -198,7 +183,7 @@ export class AuthOnboardingService {
             companyName: data.companyName,
             adminEmail: data.adminEmail,
             passwordHash,
-            plan: data.plan ?? "free",
+            plan: data.plan ?? TenantPlan.FREE,
             shopDomain: data.shopDomain,
             hfSpaceName: spaceName,
             hfSpaceUrl: space.url,

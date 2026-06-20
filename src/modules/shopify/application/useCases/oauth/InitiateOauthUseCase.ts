@@ -34,7 +34,7 @@ export class InitiateOauthUseCase extends BaseService {
         // 1. Fetch Tenant Infrastructure Credentials
         const tenantId = this.tenantContext.tenantId;
         const tenantInfra = await this.uowFactory.execute(async (uow) => {
-            return await uow.tenantN8n.findById(tenantId!);
+            return await uow.tenantN8n.findByTenantId(tenantId!);
         });
 
         if (!tenantInfra || !tenantInfra.shopifyAppClientIdEncrypted || !tenantInfra.shopifyAppClientSecretEncrypted) {

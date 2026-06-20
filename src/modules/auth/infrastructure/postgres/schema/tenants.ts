@@ -1,11 +1,13 @@
 import { pgTable, uuid, text, timestamp, boolean } from "drizzle-orm/pg-core";
+import { TenantPlan } from "../../../../../libs/shared/domain/valueObjects/TenantContext";
+import { planEnum } from "../../../../../libs/shared/infrastructure/postgres/schema/organizations";
 
 export const tenants = pgTable("tenants", {
     id: uuid("id").primaryKey().defaultRandom(),
     companyName: text("company_name").notNull(),
     adminEmail: text("admin_email").notNull().unique(),
     passwordHash: text("password_hash").notNull(),
-    plan: text("plan").notNull().default("free"),
+    plan: planEnum("plan").notNull().default(TenantPlan.FREE),
     shopDomain: text("shop_domain"),
     hfSpaceName: text("hf_space_name"),
     hfSpaceUrl: text("hf_space_url"),

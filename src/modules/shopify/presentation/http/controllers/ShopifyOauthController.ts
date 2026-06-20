@@ -59,7 +59,7 @@ export class ShopifyOauthController {
 
             const useCase = new CompleteOauthUseCase(
                 (req as any).tenantContext || ({} as any),
-                new PgConnectorRepository(this.uowFactory.getDb()),
+                this.uowFactory,
                 this.webhookService
             );
 

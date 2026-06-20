@@ -1,205 +1,189 @@
 import { AsyncLocalStorage } from "async_hooks";
-import type { Request } from "express";
-import { AppUserModel, StoreModel } from "@shared/infrastructure/mongo/models";
+import { Request } from "express";
 import { TenantContext } from "@shared/domain/valueObjects/TenantContext";
-
-export const DEFAULT_ORGANIZATION_ID = "org_default";
-export const DEFAULT_STORE_ID = "store_default";
-
-type AuthenticatedRequest = Request & {
-    user?: {
-        claims?: {
-            sub?: string;
-            organizationId?: string;
-            storeId?: string;
-        };
-    };
-    tenantContext?: TenantContext;
-};
+import { UnitOfWorkFactory } from "@shared/infrastructure/postgres/unitOfWork/UnitOfWorkFactory";
 
 export class TenantResolutionError extends Error {
-    statusCode: number;
-
-    constructor(message: string, statusCode = 403) {
+    constructor(
+        message: string,
+        public readonly statusCode: number = 403,
+    ) {
         super(message);
-        this.statusCode = statusCode;
+        this.name = "TenantResolutionError";
     }
 }
 
+// ─── AsyncLocalStorage store ──────────────────────────────────────────────────
+
 const tenantStorage = new AsyncLocalStorage<TenantContext>();
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
 const readHeader = (req: Request, key: string): string | undefined => {
-    const value = req.header(key);
-    if (!value) return undefined;
-    const normalized = value.trim();
-    return normalized.length > 0 ? normalized : undefined;
+    const value = req.header(key)?.trim();
+    return value?.length ? value : undefined;
 };
 
-const defaultTenant = (): TenantContext => ({
-    tenantId: `${DEFAULT_ORGANIZATION_ID}:${DEFAULT_STORE_ID}`,
-    organizationId: DEFAULT_ORGANIZATION_ID,
-    storeId: DEFAULT_STORE_ID,
-    plan: "free",
-    features: [],
-    limits: {},
-});
-
-const normalizeWorkspaceMemberships = (appUser: any): Partial<TenantContext>[] => {
-    const memberships: Partial<TenantContext>[] = [];
-
-    if (Array.isArray(appUser?.workspaces)) {
-        for (const workspace of appUser.workspaces) {
-            const organizationId = typeof workspace?.organizationId === "string" ? workspace.organizationId.trim() : "";
-            const storeId = typeof workspace?.storeId === "string" ? workspace.storeId.trim() : "";
-            if (!organizationId || !storeId) continue;
-            memberships.push({ organizationId, storeId, tenantId: `${organizationId}:${storeId}` });
-        }
-    }
-
-    if (typeof appUser?.organizationId === "string") {
-        const organizationId = appUser.organizationId.trim();
-        const storeId = typeof appUser?.storeId === "string" && appUser.storeId.trim() ? appUser.storeId.trim() : "";
-        if (organizationId && storeId) {
-            memberships.push({
-                organizationId,
-                storeId,
-                tenantId: `${organizationId}:${storeId}`
-            });
-        }
-    }
-
-    const deduped = new Map<string, Partial<TenantContext>>();
-    for (const membership of memberships) {
-        deduped.set(`${membership.organizationId}:${membership.storeId}`, membership);
-    }
-    return Array.from(deduped.values());
-};
-
-const resolveTenantFromHeaders = (req: Request): TenantContext => {
-    const organizationId = readHeader(req, "x-organization-id") ?? DEFAULT_ORGANIZATION_ID;
-    const storeId = readHeader(req, "x-store-id") ?? DEFAULT_STORE_ID;
-    return {
-        tenantId: `${organizationId}:${storeId}`,
-        organizationId,
-        storeId,
-        plan: "free",
-        features: [],
-        limits: {},
-    };
-};
+// ─── Public API ───────────────────────────────────────────────────────────────
 
 export const runWithTenantContext = <T>(tenant: TenantContext, callback: () => T): T =>
     tenantStorage.run(tenant, callback);
 
-export const getRuntimeTenantContext = (): TenantContext | null => tenantStorage.getStore() ?? null;
+export const getRuntimeTenantContext = (): TenantContext | null =>
+    tenantStorage.getStore() ?? null;
 
-export const getRuntimeTenantContextOrDefault = (): TenantContext =>
-    getRuntimeTenantContext() ?? defaultTenant();
+/**
+ * Resolves the tenant context for an incoming request.
+ *
+ * Resolution order:
+ *   1. Unauthenticated — headers only, validated against the DB.
+ *   2. Authenticated   — user memberships in the DB, headers used only to
+ *                        select among workspaces the user already belongs to.
+ *
+ * The unauthenticated path is intentionally strict: it exists for
+ * machine-to-machine calls (e.g. internal services) that never carry a JWT.
+ * If that path is not needed in your system, remove it entirely.
+ */
+export const resolveTenantContext = async (
+    req: Request,
+    uowFactory: UnitOfWorkFactory,
+): Promise<TenantContext> => {
+    const userId = req.userId;
 
-export const resolveTenantContext = async (req: AuthenticatedRequest): Promise<TenantContext> => {
-    const userId = req.user?.claims?.sub;
+    // ── 1. Unauthenticated path ──────────────────────────────────────────────
+    //
+    // SECURITY: Headers are untrusted input. We validate the store exists in
+    // the DB and that it belongs to the claimed organization before returning
+    // a context. Without this check any caller could fabricate a tenant.
+    //
     if (!userId) {
-        return resolveTenantFromHeaders(req);
-    }
+        const organizationId = readHeader(req, "x-organization-id");
+        const storeId = readHeader(req, "x-store-id");
 
-    const appUser = await AppUserModel.findOne({ id: userId }).lean();
-    if (!appUser?.organizationId) {
-        return resolveTenantFromHeaders(req);
-    }
+        if (!organizationId || !storeId) {
+            throw new TenantResolutionError(
+                "Tenant identifiers missing in headers (x-organization-id, x-store-id).",
+                400,
+            );
+        }
 
-    const memberships = normalizeWorkspaceMemberships(appUser);
-    const claimedOrganizationId = req.user?.claims?.organizationId?.trim();
-    const claimedStoreId = req.user?.claims?.storeId?.trim();
-    const requestedOrganizationId = readHeader(req, "x-organization-id") ?? claimedOrganizationId ?? null;
-    const requestedStoreId = readHeader(req, "x-store-id");
-    const hasOrganizationWideAccess =
-        (!Array.isArray((appUser as any).workspaces) || (appUser as any).workspaces.length === 0) &&
-        Boolean(appUser.organizationId) &&
-        !appUser.storeId;
+        return uowFactory.execute(async (uow) => {
+            const store = await uow.stores.findById(storeId);
 
-    let resolved: Partial<TenantContext> | undefined;
-
-    if (requestedStoreId) {
-        const membership = memberships.find(
-            (entry) =>
-                entry.storeId === requestedStoreId &&
-                (!requestedOrganizationId || entry.organizationId === requestedOrganizationId),
-        );
-
-        if (membership) {
-            resolved = membership;
-        } else if (!hasOrganizationWideAccess) {
-            throw new TenantResolutionError("Requested store is not accessible for this workspace.", 403);
-        } else {
-            const organizationId = requestedOrganizationId ?? String(appUser.organizationId);
-            const store = await StoreModel.findOne({
-                id: requestedStoreId,
-                organizationId,
-            }).lean();
-
-            if (!store) {
-                throw new TenantResolutionError("Requested store is not accessible for this workspace.", 403);
+            if (!store || store.organizationId !== organizationId) {
+                // Return 403, not 404 — don't confirm whether the store exists.
+                throw new TenantResolutionError(
+                    "Requested tenant could not be resolved.",
+                    403,
+                );
             }
 
-            resolved = {
-                organizationId,
-                storeId: String(store.id),
-                tenantId: `${organizationId}:${store.id}`
-            };
-        }
-    } else if (requestedOrganizationId) {
-        const organizationWorkspace = memberships.find(
-            (entry) => entry.organizationId === requestedOrganizationId,
-        );
+            const org = await uow.organizations.findById(organizationId);
+            if (!org) {
+                throw new TenantResolutionError(
+                    "Requested tenant could not be resolved.",
+                    403,
+                );
+            }
 
-        if (organizationWorkspace) {
-            resolved = organizationWorkspace;
-        } else if (!hasOrganizationWideAccess || requestedOrganizationId !== String(appUser.organizationId)) {
-            throw new TenantResolutionError("Requested workspace is not accessible for this user.", 403);
-        } else {
-            resolved = {
-                organizationId: requestedOrganizationId,
-                storeId: DEFAULT_STORE_ID,
-                tenantId: `${requestedOrganizationId}:${DEFAULT_STORE_ID}`
-            };
-        }
-    } else if (claimedOrganizationId && claimedStoreId) {
-        const claimedWorkspace = memberships.find(
-            (entry) =>
-                entry.organizationId === claimedOrganizationId &&
-                entry.storeId === claimedStoreId,
-        );
-        if (claimedWorkspace) {
-            resolved = claimedWorkspace;
-        }
+            return buildContext({
+                organizationId: org.id,
+                storeId: store.id,
+                plan: org.plan,
+            });
+        });
     }
 
-    if (!resolved && memberships.length > 0) {
-        resolved = {
-            organizationId: memberships[0].organizationId,
-            storeId: memberships[0].storeId,
-            tenantId: `${memberships[0].organizationId}:${memberships[0].storeId}`
-        };
-    }
+    // ── 2. Authenticated path ────────────────────────────────────────────────
+    //
+    // SECURITY: The user may only select among workspaces they are a member of.
+    // We never fall back to looking up an arbitrary store by ID — that was the
+    // bug that let authenticated users access stores they don't belong to.
+    //
+    return uowFactory.execute(async (uow) => {
+        const appUser = await uow.users.findById(userId);
+        if (!appUser) {
+            throw new TenantResolutionError("User not found.", 403);
+        }
 
-    if (!resolved) {
-        const organizationId = String(appUser.organizationId);
-        const storeId = appUser.storeId ? String(appUser.storeId) : DEFAULT_STORE_ID;
-        resolved = {
-            organizationId,
-            storeId,
-            tenantId: `${organizationId}:${storeId}`
-        };
-    }
+        const workspaces = await uow.userWorkspaces.findByUserId(userId);
+        if (workspaces.length === 0) {
+            throw new TenantResolutionError("User has no workspace memberships.", 403);
+        }
 
-    return {
-        ...defaultTenant(),
-        ...resolved,
-        tenantId: resolved.tenantId!,
-        organizationId: resolved.organizationId!,
-        storeId: resolved.storeId!,
-    };
+        const requestedOrganizationId = readHeader(req, "x-organization-id");
+        const requestedStoreId = readHeader(req, "x-store-id");
+
+        let resolved: (typeof workspaces)[number] | undefined;
+
+        if (requestedStoreId && requestedOrganizationId) {
+            // Both headers present — must match exactly.
+            resolved = workspaces.find(
+                (w) =>
+                    w.storeId === requestedStoreId &&
+                    w.organizationId === requestedOrganizationId,
+            );
+        } else if (requestedStoreId) {
+            resolved = workspaces.find((w) => w.storeId === requestedStoreId);
+        } else if (requestedOrganizationId) {
+            resolved = workspaces.find((w) => w.organizationId === requestedOrganizationId);
+        }
+
+        if (!resolved) {
+            if (requestedStoreId || requestedOrganizationId) {
+                // The user asked for something specific but doesn't have access.
+                // Again, 403 rather than 404 — don't leak existence.
+                throw new TenantResolutionError(
+                    "Requested workspace is not accessible.",
+                    403,
+                );
+            }
+
+            // No header hints at all: require an explicit selection when the user
+            // belongs to more than one workspace to avoid silent cross-tenant leaks.
+            if (workspaces.length > 1) {
+                throw new TenantResolutionError(
+                    "Multiple workspaces available. Provide x-organization-id or x-store-id to select one.",
+                    400,
+                );
+            }
+
+            resolved = workspaces[0];
+        }
+
+        // Fetch the org so we get real plan/features/limits from the DB.
+        const org = await uow.organizations.findById(resolved.organizationId);
+        if (!org) {
+            throw new TenantResolutionError("Organization not found.", 403);
+        }
+
+        return buildContext({
+            organizationId: resolved.organizationId,
+            storeId: resolved.storeId ?? "",
+            plan: org.plan,
+        });
+    });
 };
 
-export const getTenantContext = (req: AuthenticatedRequest): TenantContext =>
-    req.tenantContext ?? getRuntimeTenantContext() ?? resolveTenantFromHeaders(req);
+export const getTenantContext = (req: Request): TenantContext => {
+    const context = req.tenantContext ?? getRuntimeTenantContext();
+    if (!context) {
+        throw new TenantResolutionError("No active tenant context found.", 500);
+    }
+    return context;
+};
+
+// ─── Private helpers ──────────────────────────────────────────────────────────
+
+interface ContextParts {
+    organizationId: string;
+    storeId: string;
+    plan: TenantContext["plan"];
+}
+
+const buildContext = ({ organizationId, storeId, plan }: ContextParts): TenantContext => ({
+    tenantId: `${organizationId}:${storeId}`,
+    organizationId,
+    storeId,
+    plan,
+});

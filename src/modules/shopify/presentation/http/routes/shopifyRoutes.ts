@@ -12,13 +12,13 @@ import { z } from "zod";
 import { LoggerMiddleware } from "@shared/presentation/http/middleware/foundational/LoggerMiddleware";
 import { RateLimiterMiddleware } from "@shared/presentation/http/middleware/security/RateLimiterMiddleware";
 import { AuthMiddleware } from "@shared/presentation/http/middleware/security/AuthMiddleware";
-import { TenantMiddleware } from "@shared/presentation/http/middleware/security/TenantMiddleware";
+import { createTenantMiddleware } from "@shared/presentation/http/middleware/security/TenantMiddleware";
+import { createWebhookShopDomainMiddleware } from "@shared/presentation/http/middleware/security/WebhookShopDomainMiddleware";
 import { PlanGuardMiddleware } from "@shared/presentation/http/middleware/security/PlanGuardMiddleware";
 import { ValidationMiddleware } from "@shared/presentation/http/middleware/validation/ValidationMiddleware";
 import { SanitizationMiddleware } from "@shared/presentation/http/middleware/validation/SanitizationMiddleware";
 import { IdempotencyMiddleware } from "@shared/presentation/http/middleware/reliability/IdempotencyMiddleware";
 import { AuditMiddleware } from "@shared/presentation/http/middleware/audit/AuditMiddleware";
-import { WebhookShopDomainMiddleware } from "@shared/presentation/http/middleware/security/WebhookShopDomainMiddleware";
 
 export function createShopifyRouter(uowFactory: UnitOfWorkFactory): Router {
     const router = Router();
@@ -29,6 +29,9 @@ export function createShopifyRouter(uowFactory: UnitOfWorkFactory): Router {
 
     const oauthController = new ShopifyOauthController(uowFactory);
     const n8nController = new N8nInstanceController(n8nRepository);
+
+    const TenantMiddleware = createTenantMiddleware(uowFactory);
+    const WebhookShopDomainMiddleware = createWebhookShopDomainMiddleware(uowFactory);
 
     // ── Sync ──────────────────────────────────────────────────────────────────────
     router.post(
