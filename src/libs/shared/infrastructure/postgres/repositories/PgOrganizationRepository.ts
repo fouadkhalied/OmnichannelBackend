@@ -10,7 +10,7 @@ export class PgOrganizationRepository implements IPgOrganizationRepository {
             .insert(organizations)
             .values(input)
             .onConflictDoUpdate({
-                target: [organizations.name], // Or slug if you have one
+                target: organizations.id,
                 set: {
                     updatedAt: new Date(),
                 },
