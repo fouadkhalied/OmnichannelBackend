@@ -26,7 +26,6 @@ export class InitiateOauthUseCase extends BaseService {
     }
 
     async execute(input: InitiateOauthInput): Promise<InitiateOauthOutput> {
-        // 1. Get Shopify App Credentials from env
         const clientId = env.SHOPIFY_APP_CLIENT_ID;
         const clientSecret = env.SHOPIFY_APP_CLIENT_SECRET;
 
@@ -34,10 +33,8 @@ export class InitiateOauthUseCase extends BaseService {
             throw new Error(`Shopify App credentials (SHOPIFY_APP_CLIENT_ID/SECRET) not found in environment.`);
         }
 
-        // 2. Normalize and validate shop domain
         const normalizedShop = normalizeAndValidateShopDomain(input.domainShop);
 
-        // 3. Build ShopifyOauthStatePayload
         const nonce = crypto.randomBytes(16).toString("hex");
         const now = Date.now();
         const ttl = Number(env.SHOPIFY_OAUTH_STATE_TTL_MS) || 3600000;
@@ -49,7 +46,6 @@ export class InitiateOauthUseCase extends BaseService {
                 storeId: this.tenantContext.storeId!,
                 shopDomain: normalizedShop,
                 clientId: clientId,
-                clientSecret: clientSecret,
                 apiVersion: "2025-01",
                 nonce,
                 iat: now,
@@ -58,8 +54,7 @@ export class InitiateOauthUseCase extends BaseService {
             env.SHOPIFY_OAUTH_STATE_SECRET || "dev-state-secret-change-me",
         );
 
-        // 4. Build Shopify auth URL
-        const scopes = env.SHOPIFY_OAUTH_SCOPES;
+        const scopes = env.SHOPIFY_OAUTH_SCOPES || "read_products,read_inventory,read_customers,read_orders,read_fulfillments";
         const redirectUri = `${env.API_BASE_URL}/api/shopify/oauth/callback`;
         const redirectUrl = `https://${normalizedShop}/admin/oauth/authorize?client_id=${clientId}&scope=${encodeURIComponent(scopes)}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${stateToken}`;
 
@@ -68,7 +63,6 @@ export class InitiateOauthUseCase extends BaseService {
             clientId: clientId ? `${clientId.slice(0, 4)}...` : "MISSING",
             redirectUri,
             scopes,
-            fullUrl: redirectUrl
         });
 
         return { redirectUrl };

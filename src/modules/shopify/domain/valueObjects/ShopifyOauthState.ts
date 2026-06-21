@@ -8,7 +8,6 @@ export interface ShopifyOauthStatePayload {
     storeId: string;
     shopDomain: string;
     clientId: string;
-    clientSecret: string;
     apiVersion: string;
     nonce: string;
     iat: number;
@@ -17,7 +16,8 @@ export interface ShopifyOauthStatePayload {
 
 /**
  * Signs a Shopify OAuth state payload into a compact string token.
- * Format: base64url(payload).HMAC-SHA256(base64url(payload), secret)
+ * Format: v1.base64url(payload).HMAC-SHA256(v1.base64url(payload), secret)
+ * Note: clientSecret is intentionally excluded from the state payload for security.
  */
 export function createSignedShopifyOauthState(
     payload: ShopifyOauthStatePayload,
@@ -33,7 +33,7 @@ export function createSignedShopifyOauthState(
 
 /**
  * Verifies and parses a signed Shopify OAuth state token.
- * Returns null if the signature is invalid.
+ * Returns null if the signature is invalid or token is expired.
  */
 export function verifySignedShopifyOauthState(
     token: string,
@@ -59,7 +59,15 @@ export function verifySignedShopifyOauthState(
     }
 
     try {
-        return JSON.parse(Buffer.from(json, "base64url").toString("utf8")) as ShopifyOauthStatePayload;
+        const payload = JSON.parse(
+            Buffer.from(json, "base64url").toString("utf8"),
+        ) as ShopifyOauthStatePayload;
+
+        if (Date.now() > payload.exp) {
+            return null;
+        }
+
+        return payload;
     } catch {
         return null;
     }
@@ -77,7 +85,6 @@ export function verifyShopifyCallbackHmac(input: {
     const receivedHmac = params.get("hmac") ?? "";
     params.delete("hmac");
 
-    // Sort and encode params per Shopify spec
     const sortedQuery = Array.from(params.entries())
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([k, v]) => `${k}=${v}`)
@@ -88,10 +95,14 @@ export function verifyShopifyCallbackHmac(input: {
         .update(sortedQuery)
         .digest("hex");
 
-    return crypto.timingSafeEqual(
-        Buffer.from(computed, "hex"),
-        Buffer.from(receivedHmac, "hex"),
-    );
+    try {
+        return crypto.timingSafeEqual(
+            Buffer.from(computed, "hex"),
+            Buffer.from(receivedHmac, "hex"),
+        );
+    } catch {
+        return false;
+    }
 }
 
 /**
