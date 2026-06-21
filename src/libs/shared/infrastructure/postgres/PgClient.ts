@@ -14,17 +14,20 @@ const POOL_CONFIG: PoolConfig = {
 
     // timeouts
     connectionTimeoutMillis: 5_000,   // fail fast if cant get connection from pool
-    idleTimeoutMillis: 30_000,        // release idle connections after 30s
+    idleTimeoutMillis: 10_000,        // release idle connections after 10s (proactively)
     statement_timeout: 30_000,        // kill queries running over 30s
     query_timeout: 30_000,
+
+    // limit connection lifetime to avoid stale pool issues with Neon
+    maxUses: 7500,
 
     // keep connections alive through load balancers / firewalls
     keepAlive: true,
     keepAliveInitialDelayMillis: 10_000,
 
-    // ssl
-    ssl: env.NODE_ENV === "production"
-        ? { rejectUnauthorized: true }
+    // ssl - support Neon and require SSL if specified in connection string
+    ssl: env.DATABASE_URL?.includes("sslmode=require") || env.DATABASE_URL?.includes("neon.tech") || env.NODE_ENV === "production"
+        ? { rejectUnauthorized: false }
         : false,
 };
 
@@ -83,6 +86,10 @@ export async function connectPostgres(): Promise<void> {
     pool.on("error", (error: Error) => {
         logger.error("postgres.pool_error", {
             error: error.message,
+            stack: error.stack,
+            totalCount: pool?.totalCount,
+            idleCount: pool?.idleCount,
+            waitingCount: pool?.waitingCount,
         });
         // don't crash — pool will attempt to recover
         // but mark as disconnected so health checks fail
