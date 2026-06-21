@@ -5,6 +5,7 @@ import { env } from "../../../../config/env";
 import { UnitOfWorkFactory } from "../../../../libs/shared/infrastructure/postgres/unitOfWork/UnitOfWorkFactory";
 import { IUnitOfWork } from "../../../../libs/shared/infrastructure/postgres/unitOfWork/IUnitOfWork";
 import { AuthOnboardingService, OnboardingData } from "../../domain/services/AuthOnboardingService";
+import { logger } from "../../../../libs/common/logger";
 
 export interface SignupInput extends OnboardingData { }
 
@@ -31,13 +32,19 @@ export class SignupUseCase {
     async execute(input: SignupInput): Promise<SignupOutput> {
         return this.uowFactory.execute(async (uow: IUnitOfWork) => {
             // 1. Ensure email not already taken
-            const existing = await uow.users.findByEmail(input.email);
+            const existing = await uow.users.findByEmail(input.adminEmail);
             if (existing) {
                 throw Object.assign(new Error("Email already registered"), { statusCode: 409 });
             }
 
             // 2. Orchestrate onboarding via Domain Service
-            const { userId, organizationId, storeId } = await this.onboardingService.onboard(uow, input);
+            const { tenantId } = await this.onboardingService.onboard(uow, input, (status) => {
+                logger.info(`[Onboarding Progress]: ${status}`);
+            });
+
+            const userId = tenantId;
+            const organizationId = tenantId;
+            const storeId = input.shopDomain;
 
             // 3. Issue JWT
             const jti = crypto.randomUUID();
@@ -52,7 +59,7 @@ export class SignupUseCase {
 
             return {
                 token,
-                user: { id: userId, email: input.email, organizationId, storeId },
+                user: { id: userId, email: input.adminEmail, organizationId, storeId },
             };
         });
     }

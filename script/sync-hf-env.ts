@@ -20,7 +20,7 @@ async function syncEnv() {
         process.exit(1);
     }
 
-    const repoId = "fouadkhalid1212/asd";
+    const repoId = "fouadkhalid123/asd";
     const apiUrl = `https://huggingface.co/api/spaces/${repoId}/secrets`;
 
     console.log(`🚀 Syncing ${Object.keys(envConfig).length} variables to Hugging Face Space: ${repoId}...`);

@@ -21,7 +21,6 @@ const extractEntityId = (payload: any): string | null => {
 };
 
 export const ShopifyWebhookController = async (req: Request, res: Response): Promise<void> => {
-    // ── Shared instances — created inside function to ensure DB connection is ready ──
     const stagingRepository = new PgStagingRepository();
     const connectorRepository = new PgConnectorRepository();
     const n8nRepository = new PgN8nInstanceRepository();
