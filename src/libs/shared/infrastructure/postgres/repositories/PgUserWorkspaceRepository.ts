@@ -22,7 +22,7 @@ export class PgUserWorkspaceRepository implements IPgUserWorkspaceRepository {
             storeId: data.storeId,
             role: data.role ?? "member",
         }).onConflictDoUpdate({
-            target: [userWorkspaces.userId, userWorkspaces.organizationId],
+            target: [userWorkspaces.userId, userWorkspaces.organizationId, userWorkspaces.storeId],
             set: {
                 storeId: data.storeId,
                 role: data.role ?? "member",

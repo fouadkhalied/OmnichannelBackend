@@ -10,7 +10,7 @@ export class PgStoreRepository implements IPgStoreRepository {
             .insert(stores)
             .values(input)
             .onConflictDoUpdate({
-                target: stores.id,
+                target: [stores.id],
                 set: {
                     updatedAt: new Date(),
                 },

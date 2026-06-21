@@ -11,7 +11,7 @@ export class PgTenantRepository implements ITenantRepository {
         const [result] = await this.db.insert(tenants)
             .values(data)
             .onConflictDoUpdate({
-                target: tenants.id,
+                target: [tenants.id],
                 set: data,
             })
             .returning();
@@ -24,7 +24,7 @@ export class PgTenantRepository implements ITenantRepository {
     }
 
     async findByEmail(email: string): Promise<any> {
-        const [result] = await this.db.select().from(tenants).where(eq(tenants.adminEmail, email)).limit(1);
+        const [result] = await this.db.select().from(tenants).where(eq(tenants.email, email)).limit(1);
         return result;
     }
 }
