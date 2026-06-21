@@ -2,7 +2,6 @@ import { Request, Response } from "express";
 import { TriggerSyncUseCase } from "../../../application/useCases/sync/TriggerSyncUseCase";
 import { PgSyncJobRepository } from "../../../infrastructure/postgres/repositories/PgSyncJobRepository";
 import { InMemoryEventPublisher } from "../../../application/ports/IEventPublisher";
-import { DEFAULT_ORGANIZATION_ID, DEFAULT_STORE_ID } from "../../../../../libs/shared/presentation/http/tenant/TenantResolver";
 
 export const ShopifySyncController = async (req: Request, res: Response): Promise<void> => {
     // ── Shared instances — created inside function to ensure DB connection is ready ──
@@ -13,24 +12,6 @@ export const ShopifySyncController = async (req: Request, res: Response): Promis
     if (!tenantContext) {
         // Should never happen — TenantMiddleware runs before this
         res.status(401).json({ error: { code: "UNAUTHORIZED", message: "Tenant context missing" } });
-        return;
-    }
-
-    // Guard: never create a sync job for the anonymous default tenant.
-    // This happens when AuthMiddleware is disabled and no x-organization-id /
-    // x-store-id headers are sent — the tenant resolver falls back to defaults.
-    if (
-        tenantContext.organizationId === DEFAULT_ORGANIZATION_ID ||
-        tenantContext.storeId === DEFAULT_STORE_ID
-    ) {
-        res.status(400).json({
-            error: {
-                code: "TENANT_REQUIRED",
-                message:
-                    "Cannot trigger a sync without a valid tenant. " +
-                    "Send x-organization-id and x-store-id headers.",
-            },
-        });
         return;
     }
 
