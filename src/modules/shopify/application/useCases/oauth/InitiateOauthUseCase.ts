@@ -63,6 +63,7 @@ export class InitiateOauthUseCase extends BaseService {
             clientId: clientId ? `${clientId.slice(0, 4)}...` : "MISSING",
             redirectUri,
             scopes,
+            redirectUrl: redirectUrl
         });
 
         return { redirectUrl };
