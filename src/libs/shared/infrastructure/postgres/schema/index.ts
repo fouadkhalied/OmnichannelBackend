@@ -1,5 +1,5 @@
 export * from "./organizations";
-export * from "./stores";
+export * from "../../../../../modules/auth/infrastructure/postgres/schema/stores";
 export * from "./users";
 export * from "./userWorkspaces";
 export * from "./connectorCredentials";
@@ -16,6 +16,5 @@ export * from "./refunds";
 export * from "./syncJobs";
 export * from "./n8nInstances";
 export * from "../../../../../modules/auth/infrastructure/postgres/schema/tenants";
-export * from "../../../../../modules/auth/infrastructure/postgres/schema/tenantN8n";
 export * from "../../../../../modules/auth/infrastructure/postgres/schema/tenantSyncLogs";
 export * from "../../../../../modules/shopify/infrastructure/postgres/schema/stadging.schema";

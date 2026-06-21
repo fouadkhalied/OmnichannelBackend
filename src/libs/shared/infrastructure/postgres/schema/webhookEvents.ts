@@ -1,5 +1,5 @@
 import { pgTable, uuid, text, jsonb, timestamp, index } from "drizzle-orm/pg-core";
-import { stores } from "./stores";
+import { stores } from "../../../../../modules/auth/infrastructure/postgres/schema/stores";
 
 export const webhookEvents = pgTable("webhook_events", {
     id: uuid("id").primaryKey().defaultRandom(),

@@ -1,5 +1,5 @@
 import { pgTable, uuid, text, timestamp, index, vector } from "drizzle-orm/pg-core";
-import { stores } from "./stores";
+import { stores } from "../../../../../modules/auth/infrastructure/postgres/schema/stores";
 
 export const embeddings = pgTable("embeddings", {
     id: uuid("id").primaryKey().defaultRandom(),

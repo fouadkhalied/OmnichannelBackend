@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { stores, Store, NewStore } from "../schema/stores";
+import { stores, Store, NewStore } from "../../../../../modules/auth/infrastructure/postgres/schema/stores";
 import { IPgStoreRepository } from "./IPgStoreRepository";
 
 export class PgStoreRepository implements IPgStoreRepository {

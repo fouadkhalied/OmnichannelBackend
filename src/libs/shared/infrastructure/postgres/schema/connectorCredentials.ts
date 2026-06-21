@@ -1,6 +1,6 @@
 import { pgTable, uuid, text, timestamp, index, unique } from "drizzle-orm/pg-core";
 import { organizations } from "./organizations";
-import { stores } from "./stores";
+import { stores } from "../../../../../modules/auth/infrastructure/postgres/schema/stores";
 
 export const connectorCredentials = pgTable("connector_credentials", {
     id: uuid("id").primaryKey().defaultRandom(),

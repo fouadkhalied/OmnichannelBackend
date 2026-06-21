@@ -1,7 +1,7 @@
 import { pgTable, uuid, text, timestamp, uniqueIndex, index } from "drizzle-orm/pg-core";
 import { users } from "./users";
 import { organizations } from "./organizations";
-import { stores } from "./stores";
+import { stores } from "../../../../../modules/auth/infrastructure/postgres/schema/stores";
 
 export const userWorkspaces = pgTable("user_workspaces", {
     id: uuid("id").primaryKey().defaultRandom(),

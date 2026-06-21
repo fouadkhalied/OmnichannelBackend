@@ -4,7 +4,8 @@ import { JtiStore } from "../../../../libs/shared/infrastructure/memory/JtiStore
 import { env } from "../../../../config/env";
 import { UnitOfWorkFactory } from "../../../../libs/shared/infrastructure/postgres/unitOfWork/UnitOfWorkFactory";
 import { IUnitOfWork } from "../../../../libs/shared/infrastructure/postgres/unitOfWork/IUnitOfWork";
-import { AuthOnboardingService, OnboardingData } from "../../domain/services/AuthOnboardingService";
+import { OnboardingData } from "../../domain/services/AuthOnboardingService";
+import { AuthOrchestrator } from "../orchestrator/AuthOrchestrator";
 import { logger } from "../../../../libs/common/logger";
 
 export interface SignupInput extends OnboardingData { }
@@ -19,14 +20,11 @@ export interface SignupOutput {
     };
 }
 
-const JWT_SECRET = env.SESSION_SECRET;
-const TOKEN_TTL_S = 60 * 60 * 24 * 7; // 7 days
-
 export class SignupUseCase {
-    private readonly onboardingService: AuthOnboardingService;
+    private readonly orchestrator: AuthOrchestrator;
 
     constructor(private readonly uowFactory: UnitOfWorkFactory) {
-        this.onboardingService = new AuthOnboardingService();
+        this.orchestrator = new AuthOrchestrator();
     }
 
     async execute(input: SignupInput): Promise<SignupOutput> {
@@ -37,30 +35,8 @@ export class SignupUseCase {
                 throw Object.assign(new Error("Email already registered"), { statusCode: 409 });
             }
 
-            // 2. Orchestrate onboarding via Domain Service
-            const { tenantId } = await this.onboardingService.onboard(uow, input, (status) => {
-                logger.info(`[Onboarding Progress]: ${status}`);
-            });
-
-            const userId = tenantId;
-            const organizationId = tenantId;
-            const storeId = input.shopDomain;
-
-            // 3. Issue JWT
-            const jti = crypto.randomUUID();
-            const expiresAt = Date.now() + TOKEN_TTL_S * 1000;
-            const token = jwt.sign(
-                { sub: userId, jti, organizationId, storeId },
-                JWT_SECRET,
-                { expiresIn: TOKEN_TTL_S }
-            );
-
-            JtiStore.set(jti, userId, expiresAt);
-
-            return {
-                token,
-                user: { id: userId, email: input.adminEmail, organizationId, storeId },
-            };
+            // 2. Delegate to Orchestrator
+            return this.orchestrator.signUp(uow, input);
         });
     }
 }

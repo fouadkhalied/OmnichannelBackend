@@ -1,5 +1,5 @@
 import { pgTable, uuid, text, timestamp, integer, index, unique } from "drizzle-orm/pg-core";
-import { stores } from "./stores";
+import { stores } from "../../../../../modules/auth/infrastructure/postgres/schema/stores";
 
 export const inventoryLevels = pgTable("inventory_levels", {
     id: uuid("id").primaryKey().defaultRandom(),
