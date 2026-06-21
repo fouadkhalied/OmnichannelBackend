@@ -28,10 +28,10 @@ export class RunSyncJobUseCase {
 
     async execute(job: ShopifySyncJob): Promise<void> {
         try {
-            logger.info(`Starting RunSyncJobUseCase for tenant: ${job.tenantId}`, { jobId: job.id });
+            logger.info(`Starting RunSyncJobUseCase for tenant: ${job.storeId}`, { jobId: job.id });
 
             // 1. Load credentials — keyed by job.tenantId (the real tenant)
-            const credentials = await this.connectorRepository.getCredentials(job.tenantId);
+            const credentials = await this.connectorRepository.getCredentials(job.storeId);
 
             // 2. Restore cursor
             const fullCursor = await this.stagingRepository.getCursor(job.tenantId, job.id) || {
@@ -100,9 +100,6 @@ export class RunSyncJobUseCase {
 
             // 6. Mark Completed
             await this.syncJobRepository.markCompleted(job.id, job.progress);
-
-            // 7. Update last sync at
-            await this.connectorRepository.updateLastSyncAt(job.tenantId);
 
             logger.info(`Completed RunSyncJobUseCase for tenant: ${job.tenantId}`, { jobId: job.id });
         } catch (error: any) {

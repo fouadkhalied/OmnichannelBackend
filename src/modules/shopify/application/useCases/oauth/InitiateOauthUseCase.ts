@@ -5,17 +5,12 @@ import {
     normalizeAndValidateShopDomain,
 } from "../../../domain/valueObjects/ShopifyOauthState";
 import crypto from "crypto";
-import { UnitOfWorkFactory } from "../../../../../libs/shared/infrastructure/postgres/unitOfWork/UnitOfWorkFactory";
-import { Vault } from "../../../../../libs/shared/crypto/vault";
 import { env } from "../../../../../config/env";
 import { logger } from "../../../../../libs/common/logger";
+import { UnitOfWorkFactory } from "../../../../../libs/shared/infrastructure/postgres/unitOfWork/UnitOfWorkFactory";
 
 export interface InitiateOauthInput {
-    userId: string;
-    organizationId: string;
-    storeId: string;
-    shopDomain: string;
-    apiVersion: string;
+    domainShop: string;
 }
 
 export interface InitiateOauthOutput {
@@ -31,43 +26,31 @@ export class InitiateOauthUseCase extends BaseService {
     }
 
     async execute(input: InitiateOauthInput): Promise<InitiateOauthOutput> {
-        // 1. Fetch Tenant Infrastructure Credentials
-        const tenantId = this.tenantContext.tenantId;
-        const tenantInfra = await this.uowFactory.execute(async (uow) => {
-            return await uow.tenantN8n.findByTenantId(tenantId!);
-        });
+        // 1. Get Shopify App Credentials from env
+        const clientId = env.SHOPIFY_APP_CLIENT_ID;
+        const clientSecret = env.SHOPIFY_APP_CLIENT_SECRET;
 
-        if (!tenantInfra || !tenantInfra.shopifyAppClientIdEncrypted || !tenantInfra.shopifyAppClientSecretEncrypted) {
-            throw new Error(`Shopify App credentials not found for tenant ${tenantId}. Please register them first.`);
+        if (!clientId || !clientSecret) {
+            throw new Error(`Shopify App credentials (SHOPIFY_APP_CLIENT_ID/SECRET) not found in environment.`);
         }
 
-        // 2. Decrypt Credentials
-        const clientId = Vault.decrypt({
-            ciphertext: tenantInfra.shopifyAppClientIdEncrypted!,
-            iv: tenantInfra.iv
-        });
-        const clientSecret = Vault.decrypt({
-            ciphertext: tenantInfra.shopifyAppClientSecretEncrypted!,
-            iv: tenantInfra.iv
-        });
+        // 2. Normalize and validate shop domain
+        const normalizedShop = normalizeAndValidateShopDomain(input.domainShop);
 
-        // 3. Normalize and validate shop domain
-        const normalizedShop = normalizeAndValidateShopDomain(input.shopDomain);
-
-        // 4. Build ShopifyOauthStatePayload
+        // 3. Build ShopifyOauthStatePayload
         const nonce = crypto.randomBytes(16).toString("hex");
         const now = Date.now();
         const ttl = Number(env.SHOPIFY_OAUTH_STATE_TTL_MS) || 3600000;
 
         const stateToken = createSignedShopifyOauthState(
             {
-                userId: input.userId,
-                organizationId: input.organizationId,
-                storeId: input.storeId,
+                userId: (this.tenantContext as any).userId || "anonymous",
+                organizationId: this.tenantContext.organizationId!,
+                storeId: this.tenantContext.storeId!,
                 shopDomain: normalizedShop,
                 clientId: clientId,
                 clientSecret: clientSecret,
-                apiVersion: input.apiVersion,
+                apiVersion: "2025-01",
                 nonce,
                 iat: now,
                 exp: now + ttl,
@@ -75,13 +58,7 @@ export class InitiateOauthUseCase extends BaseService {
             env.SHOPIFY_OAUTH_STATE_SECRET || "dev-state-secret-change-me",
         );
 
-        // 5. Build Shopify auth URL
-        // https://{shopDomain}/admin/oauth/authorize
-        //   ?client_id={SHOPIFY_APP_CLIENT_ID}
-        //   &scope={SHOPIFY_OAUTH_SCOPES}
-        //   &redirect_uri={API_BASE_URL}/api/shopify/oauth/callback
-        //   &state={signedState}
-
+        // 4. Build Shopify auth URL
         const scopes = env.SHOPIFY_OAUTH_SCOPES;
         const redirectUri = `${env.API_BASE_URL}/api/shopify/oauth/callback`;
         const redirectUrl = `https://${normalizedShop}/admin/oauth/authorize?client_id=${clientId}&scope=${encodeURIComponent(scopes)}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${stateToken}`;
