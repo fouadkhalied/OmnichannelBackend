@@ -12,7 +12,6 @@ import { PgStagingRepository } from "../../../../../modules/shopify/infrastructu
 import { IUnitOfWork } from "./IUnitOfWork";
 import { PgUserWorkspaceRepository } from "../repositories/PgUserWorkspaceRepository";
 import { PgTenantRepository } from "../../../../../modules/auth/infrastructure/postgres/repositories/PgTenantRepository";
-import { PgTenantN8nRepository } from "../../../../../modules/auth/infrastructure/postgres/repositories/PgTenantN8nRepository";
 import { PgTenantSyncLogRepository } from "../../../../../modules/auth/infrastructure/postgres/repositories/PgTenantSyncLogRepository";
 
 export class UnitOfWorkFactory {
@@ -40,7 +39,6 @@ export class UnitOfWorkFactory {
                 syncJobs: new PgSyncJobRepository(tx),
                 staging: new PgStagingRepository(tx),
                 tenants: new PgTenantRepository(tx),
-                tenantN8n: new PgTenantN8nRepository(tx),
                 tenantSyncLogs: new PgTenantSyncLogRepository(tx),
             });
         });

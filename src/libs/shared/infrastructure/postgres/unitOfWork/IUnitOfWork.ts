@@ -11,7 +11,6 @@ import { ISyncJobRepository } from "../../../../../modules/shopify/domain/reposi
 import { IStagingRepository } from "../../../../../modules/shopify/domain/repositories/IStagingRepository";
 import { IPgUserWorkspaceRepository } from "../repositories/IPgUserWorkspaceRepository";
 import { ITenantRepository } from "../../../../../modules/auth/domain/repositories/ITenantRepository";
-import { ITenantN8nRepository } from "../../../../../modules/auth/domain/repositories/ITenantN8nRepository";
 import { ITenantSyncLogRepository } from "../../../../../modules/auth/domain/repositories/ITenantSyncLogRepository";
 
 export interface IUnitOfWork {
@@ -28,6 +27,5 @@ export interface IUnitOfWork {
     syncJobs: ISyncJobRepository;
     staging: IStagingRepository;
     tenants: ITenantRepository;
-    tenantN8n: ITenantN8nRepository;
     tenantSyncLogs: ITenantSyncLogRepository;
 }
