@@ -4,11 +4,16 @@ import { JtiStore } from "../../../../libs/shared/infrastructure/memory/JtiStore
 import { env } from "../../../../config/env";
 import { UnitOfWorkFactory } from "../../../../libs/shared/infrastructure/postgres/unitOfWork/UnitOfWorkFactory";
 import { IUnitOfWork } from "../../../../libs/shared/infrastructure/postgres/unitOfWork/IUnitOfWork";
-import { OnboardingData } from "../../domain/services/AuthOnboardingService";
+import { TenantPlan } from "../../../../libs/shared/domain/valueObjects/TenantContext";
 import { AuthOrchestrator } from "../orchestrator/AuthOrchestrator";
-import { logger } from "../../../../libs/common/logger";
 
-export interface SignupInput extends OnboardingData { }
+export interface SignupInput {
+    adminEmail: string;
+    adminPassword: string;
+    companyName: string;
+    shopDomain: string;
+    plan?: TenantPlan;
+}
 
 export interface SignupOutput {
     token: string;

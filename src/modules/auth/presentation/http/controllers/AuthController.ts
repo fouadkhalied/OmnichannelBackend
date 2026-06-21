@@ -6,24 +6,7 @@ import { logoutUseCase } from "../../../application/useCases/LogoutUseCase";
 import { UnitOfWorkFactory } from "../../../../../libs/shared/infrastructure/postgres/unitOfWork/UnitOfWorkFactory";
 import { TenantPlan } from "../../../../../libs/shared/domain/valueObjects/TenantContext";
 
-const signupSchema = z.object({
-    adminEmail: z.string().email(),
-    adminPassword: z.string().min(8, "Password must be at least 8 characters"),
-    companyName: z.string().min(1, "Company name is required"),
-    shopDomain: z.string().url("Must be a valid URL"),
-    shopifyAppClientId: z.string().min(1, "Shopify App Client ID is required"),
-    shopifyAppClientSecret: z.string().min(1, "Shopify App Client Secret is required"),
-    neonConnectionString: z.string().min(1, "Neon connection string is required"),
-    openaiApiKey: z.string().min(1, "OpenAI API key is required"),
-    hfToken: z.string().min(1, "Hugging Face token is required"),
-    hfUsername: z.string().min(1, "Hugging Face username is required"),
-    plan: z.nativeEnum(TenantPlan).optional(),
-});
-
-const loginSchema = z.object({
-    email: z.string().email(),
-    password: z.string().min(1),
-});
+import { signupSchema, loginSchema } from "../validation/AuthSchemas";
 
 export class AuthController {
     private readonly signupUseCase: SignupUseCase;
@@ -42,7 +25,7 @@ export class AuthController {
         }
 
         try {
-            const result = await this.signupUseCase.execute(parsed.data);
+            const result = await this.signupUseCase.execute(parsed.data as any);
             res.status(201).json(result);
         } catch (err: any) {
             res.status(err.statusCode ?? 500).json({ error: err.message ?? "Signup failed" });
