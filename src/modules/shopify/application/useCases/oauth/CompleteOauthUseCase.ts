@@ -52,16 +52,28 @@ export class CompleteOauthUseCase extends BaseService {
             throw new UnauthorizedError("Shopify OAuth state expired");
         }
 
-        const { organizationId, storeId, apiVersion, clientId, clientSecret } = payload;
+        const { organizationId, storeId, apiVersion, clientId } = payload;
 
-        // 0. Extract the actual shop domain from the callback query (this is the definitive .myshopify.com domain)
+        // 1. Fetch credentials from DB
+        const store = await this.uowFactory.execute(async (uow) => {
+            return uow.stores.findById(storeId);
+        });
+
+        if (!store || !store.shopifyClientId || !store.shopifyClientSecret) {
+            throw new Error(`Store credentials not found for store ${storeId}. Please re-initiate OAuth.`);
+        }
+
+        const shopifyClientId = store.shopifyClientId;
+        const shopifyClientSecret = store.shopifyClientSecret;
+
+        // 0. Extract the actual shop domain from the callback query
         const params = new URLSearchParams(input.rawQuery);
         const actualShopDomain = normalizeAndValidateShopDomain(params.get("shop") || payload.shopDomain);
 
-        // 1. Verify Callback HMAC using the clientSecret from the state
+        // 2. Verify Callback HMAC using the clientSecret from DB
         const isValidHmac = verifyShopifyCallbackHmac({
             rawQuery: input.rawQuery,
-            clientSecret: clientSecret,
+            clientSecret: shopifyClientSecret,
         });
 
         if (!isValidHmac) {
@@ -75,8 +87,8 @@ export class CompleteOauthUseCase extends BaseService {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    client_id: clientId,
-                    client_secret: clientSecret,
+                    client_id: shopifyClientId,
+                    client_secret: shopifyClientSecret,
                     code: input.code,
                 }),
             }
@@ -92,8 +104,8 @@ export class CompleteOauthUseCase extends BaseService {
             scope: string;
         };
 
-        // 4. Use the custom Client Secret from the OAuth initiation for webhooks
-        const webhookSecret = clientSecret;
+        // 4. Use the custom Client Secret from the DB for webhooks
+        const webhookSecret = shopifyClientSecret;
 
         // 5. Save credentials and Sync
         await this.uowFactory.execute(async (uow) => {
@@ -103,12 +115,12 @@ export class CompleteOauthUseCase extends BaseService {
                 storeId,
                 shopDomain: actualShopDomain,
                 provider: "shopify",
-                clientId,
+                clientId: shopifyClientId,
                 apiVersion,
                 scopes: scope,
                 encryptedCredentials: JSON.stringify({
                     accessToken: access_token,
-                    clientSecret,
+                    clientSecret: shopifyClientSecret,
                     webhookSecret,
                     scopes: scope,
                 }),
@@ -125,26 +137,6 @@ export class CompleteOauthUseCase extends BaseService {
                 storeId,
             });
 
-            // 7. Update n8n Infrastructure
-            const tenantN8n = await uow.tenantN8n.findByTenantId(organizationId); // Assuming organizationId is tenantId
-            if (tenantN8n) {
-                const n8n = new N8nClient(tenantN8n.n8nBaseUrl!);
-                const n8nApiKey = Vault.decrypt({ ciphertext: tenantN8n.n8nApiKeyEncrypted!, iv: tenantN8n.iv });
-
-                // Update the Shopify credential in n8n (from PENDING_OAUTH to real token)
-                if (tenantN8n.n8nShopifyCredentialId) {
-                    await n8n.updateCredential(n8nApiKey, tenantN8n.n8nShopifyCredentialId, {
-                        name: `shopify-${organizationId}`,
-                        type: "httpHeaderAuth",
-                        data: { name: "X-Shopify-Access-Token", value: access_token }
-                    });
-                }
-
-                // Trigger Initial Sync in n8n
-                if (tenantN8n.n8nIngestionWorkflowId) {
-                    await n8n.runWorkflow(n8nApiKey, tenantN8n.n8nIngestionWorkflowId, { mode: "full_sync" });
-                }
-            }
         });
 
         return {

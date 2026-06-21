@@ -17,10 +17,10 @@ export class ShopifyOauthController {
     async initiate(req: Request, res: Response): Promise<void> {
         try {
             const tenantContext = (req as any).tenantContext;
-            const { shop } = req.body;
+            const { shop, clientId, clientSecret } = req.body;
 
-            if (!shop) {
-                res.status(400).json({ error: "Missing 'shop' in request body" });
+            if (!shop || !clientId || !clientSecret) {
+                res.status(400).json({ error: "Missing 'shop', 'clientId', or 'clientSecret' in request body" });
                 return;
             }
 
@@ -30,7 +30,9 @@ export class ShopifyOauthController {
             );
 
             const { redirectUrl } = await useCase.execute({
-                domainShop: shop,
+                shop,
+                clientId,
+                clientSecret,
             });
 
             res.redirect(redirectUrl);

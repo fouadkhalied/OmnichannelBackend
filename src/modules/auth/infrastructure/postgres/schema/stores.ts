@@ -7,6 +7,8 @@ export const stores = pgTable("stores", {
     name: text("name").notNull(),
     platform: text("platform").notNull().default("shopify"),
     storeUrl: text("store_url").notNull(),
+    shopifyClientId: text("shopify_client_id"),
+    shopifyClientSecret: text("shopify_client_secret"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => ({

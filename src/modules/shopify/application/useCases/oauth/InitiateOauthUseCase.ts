@@ -10,7 +10,9 @@ import { logger } from "../../../../../libs/common/logger";
 import { UnitOfWorkFactory } from "../../../../../libs/shared/infrastructure/postgres/unitOfWork/UnitOfWorkFactory";
 
 export interface InitiateOauthInput {
-    domainShop: string;
+    shop: string;
+    clientId: string;
+    clientSecret: string;
 }
 
 export interface InitiateOauthOutput {
@@ -26,15 +28,24 @@ export class InitiateOauthUseCase extends BaseService {
     }
 
     async execute(input: InitiateOauthInput): Promise<InitiateOauthOutput> {
-        const clientId = env.SHOPIFY_APP_CLIENT_ID;
-        const clientSecret = env.SHOPIFY_APP_CLIENT_SECRET;
+        const normalizedShop = normalizeAndValidateShopDomain(input.shop);
 
-        if (!clientId || !clientSecret) {
-            throw new Error(`Shopify App credentials (SHOPIFY_APP_CLIENT_ID/SECRET) not found in environment.`);
-        }
+        // 1. Save credentials to Store record
+        await this.uowFactory.execute(async (uow) => {
+            const storeId = this.tenantContext.storeId;
+            if (!storeId) throw new Error("Store ID missing in tenant context.");
 
-        const normalizedShop = normalizeAndValidateShopDomain(input.domainShop);
+            await uow.stores.upsert({
+                id: storeId,
+                organizationId: this.tenantContext.organizationId!,
+                name: normalizedShop, // or keep existing name
+                shopifyClientId: input.clientId,
+                shopifyClientSecret: input.clientSecret,
+                storeUrl: normalizedShop,
+            });
+        });
 
+        const clientId = input.clientId;
         const nonce = crypto.randomBytes(16).toString("hex");
         const now = Date.now();
         const ttl = Number(env.SHOPIFY_OAUTH_STATE_TTL_MS) || 3600000;

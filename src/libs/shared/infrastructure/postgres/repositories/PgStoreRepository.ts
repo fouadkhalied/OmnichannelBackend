@@ -12,6 +12,8 @@ export class PgStoreRepository implements IPgStoreRepository {
             .onConflictDoUpdate({
                 target: [stores.id],
                 set: {
+                    shopifyClientId: input.shopifyClientId,
+                    shopifyClientSecret: input.shopifyClientSecret,
                     updatedAt: new Date(),
                 },
             })
