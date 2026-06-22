@@ -32,14 +32,7 @@ export class InitiateOauthUseCase extends BaseService {
 
         // 1. Save credentials to Store record
         await this.uowFactory.execute(async (uow) => {
-            const storeId = this.tenantContext.storeId;
-            if (!storeId) throw new Error("Store ID missing in tenant context.");
-
-            const store = await uow.stores.findById(storeId);
-            if (!store) throw new Error("Store not found.");
-
             await uow.stores.upsert({
-                id: storeId,
                 organizationId: this.tenantContext.organizationId!,
                 name: normalizedShop, // or keep existing name
                 shopifyClientId: input.clientId,
