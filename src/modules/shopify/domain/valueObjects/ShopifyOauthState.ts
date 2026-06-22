@@ -5,7 +5,6 @@ const STATE_VERSION = "v1";
 export interface ShopifyOauthStatePayload {
     userId: string;
     organizationId: string;
-    storeId: string;
     shopDomain: string;
     clientId: string;
     apiVersion: string;

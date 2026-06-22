@@ -35,6 +35,9 @@ export class InitiateOauthUseCase extends BaseService {
             const storeId = this.tenantContext.storeId;
             if (!storeId) throw new Error("Store ID missing in tenant context.");
 
+            const store = await uow.stores.findById(storeId);
+            if (!store) throw new Error("Store not found.");
+
             await uow.stores.upsert({
                 id: storeId,
                 organizationId: this.tenantContext.organizationId!,
@@ -54,7 +57,6 @@ export class InitiateOauthUseCase extends BaseService {
             {
                 userId: (this.tenantContext as any).userId || "anonymous",
                 organizationId: this.tenantContext.organizationId!,
-                storeId: this.tenantContext.storeId!,
                 shopDomain: normalizedShop,
                 clientId: clientId,
                 apiVersion: "2025-01",

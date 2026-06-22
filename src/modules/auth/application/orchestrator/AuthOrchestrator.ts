@@ -70,6 +70,7 @@ export class AuthOrchestrator {
         await uow.userWorkspaces.upsert({
             userId,
             organizationId,
+            storeId,
             role: "user",
         });
 
