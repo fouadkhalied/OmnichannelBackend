@@ -31,17 +31,13 @@ jobs:
           # Generate HF Space README config
           cat > README.md << 'EOF'
           ---
-          title: {{title}}
-emoji: {{emoji}}
-colorFrom: {{colorFrom}}
-colorTo: {{colorTo}}
-sdk: {{sdk}}
-sdk_version: "{{sdkVersion}}"
-{{#pythonVersion}}
-python_version: "{{pythonVersion}}"
-{{/pythonVersion}}
-app_file: app.py
-pinned: false
+              title: Backend
+              emoji: 🚀
+              colorFrom: blue
+              colorTo: indigo
+              sdk: docker
+              sdk_version: "latest"
+              pinned: false
           ---
 
           Check out the configuration reference at https://huggingface.co/docs/hub/spaces-config-reference
