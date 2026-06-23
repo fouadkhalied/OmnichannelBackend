@@ -10,6 +10,7 @@ import { UnauthorizedError } from "../../../../../libs/shared/domain/errors/Unau
 import { env } from "../../../../../config/env";
 
 import { UnitOfWorkFactory } from "../../../../../libs/shared/infrastructure/postgres/unitOfWork/UnitOfWorkFactory";
+import { Vault } from "src/libs/shared/crypto/vault";
 
 // CompleteOauthUseCase.ts
 
@@ -106,8 +107,6 @@ export class CompleteOauthUseCase extends BaseService {
                 name: actualShopDomain,
                 platform: "shopify",
                 storeUrl: actualShopDomain,
-                shopifyClientId: clientId,
-                shopifyClientSecret: clientSecret,
             });
 
             // Now we have storeId — upsert credentials
@@ -119,12 +118,12 @@ export class CompleteOauthUseCase extends BaseService {
                 clientId,
                 apiVersion,
                 scopes: scope,
-                encryptedCredentials: JSON.stringify({
+                encryptedCredentials: Vault.encrypt(JSON.stringify({
                     accessToken: access_token,
                     clientSecret,
                     webhookSecret: clientSecret,
                     scopes: scope,
-                }),
+                })),
                 status: "active",
                 updatedAt: new Date(),
             });

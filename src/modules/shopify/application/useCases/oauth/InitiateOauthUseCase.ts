@@ -7,7 +7,6 @@ import {
 import crypto from "crypto";
 import { env } from "../../../../../config/env";
 import { logger } from "../../../../../libs/common/logger";
-import { UnitOfWorkFactory } from "../../../../../libs/shared/infrastructure/postgres/unitOfWork/UnitOfWorkFactory";
 
 // InitiateOauthUseCase.ts
 
@@ -37,7 +36,7 @@ export class InitiateOauthUseCase extends BaseService {
 
         const stateToken = createSignedShopifyOauthState(
             {
-                userId: (this.tenantContext as any).userId || "anonymous",
+                userId: (this.tenantContext as any).userId,
                 organizationId: this.tenantContext.organizationId!,
                 shopDomain: normalizedShop,
                 clientId: input.clientId,

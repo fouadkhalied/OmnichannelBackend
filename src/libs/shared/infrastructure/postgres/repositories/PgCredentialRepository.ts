@@ -41,6 +41,15 @@ export class PgCredentialRepository implements IPgCredentialRepository {
         return result || null;
     }
 
+    async findByStoreId(storeId: string): Promise<ConnectorCredential | null> {
+        const [result] = await this.db
+            .select()
+            .from(connectorCredentials)
+            .where(eq(connectorCredentials.storeId, storeId))
+            .limit(1);
+        return result || null;
+    }
+
     async markError(organizationId: string, storeId: string, error: string): Promise<void> {
         await this.db
             .update(connectorCredentials)

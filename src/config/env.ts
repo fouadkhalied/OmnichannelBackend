@@ -73,6 +73,9 @@ const envSchema = z
     AI_RETRIEVAL_TOP_K: z.coerce.number().int().min(1).max(50).default(5),
     AI_IMAGE_MATCH_TOP_K: z.coerce.number().int().min(1).max(50).default(5),
     AI_IMAGE_MATCH_MIN_SCORE: z.coerce.number().min(0).max(1).default(0.22),
+    ENCRYPTION_KEY: z.string().min(64).optional(),
+    N8N_WEBHOOK_URL: z.string().min(1).optional(),
+    N8N_INTERNAL_SECRET: z.string().min(1).optional(),
   })
   .superRefine((data, ctx) => {
     const hasReplId = Boolean(data.REPL_ID);

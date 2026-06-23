@@ -13,8 +13,6 @@ export class PgStoreRepository implements IPgStoreRepository {
                 target: [stores.organizationId, stores.storeUrl],  // ← fix
                 set: {
                     name: input.name,
-                    shopifyClientId: input.shopifyClientId,
-                    shopifyClientSecret: input.shopifyClientSecret,
                     updatedAt: new Date(),
                 },
             })

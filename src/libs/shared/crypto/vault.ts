@@ -1,70 +1,35 @@
+// libs/shared/crypto/Vault.ts
+
 import crypto from "crypto";
-import { env } from "../../../config/env";
+import { env } from "src/config/env";
 
 const ALGORITHM = "aes-256-gcm";
-const IV_LENGTH = 12;
-const TAG_LENGTH = 16;
-const KEY_LENGTH = 32;
-const SALT = "tenant-vault-salt";
+const KEY = Buffer.from(env.ENCRYPTION_KEY, "hex"); // 32 bytes = 64 hex chars
 
-export interface EncryptedData {
-    ciphertext: string;
-    iv: string;
-}
-
-/**
- * Vault utility for secure encryption of tenant credentials.
- * Returns IV and ciphertext separately for database storage.
- */
 export class Vault {
-    private static getEncryptionKey(secret: string): Buffer {
-        return crypto.scryptSync(secret, SALT, KEY_LENGTH);
+    static encrypt(plaintext: string): string {
+        const iv = crypto.randomBytes(12);
+        const cipher = crypto.createCipheriv(ALGORITHM, KEY, iv);
+        const encrypted = Buffer.concat([
+            cipher.update(plaintext, "utf8"),
+            cipher.final(),
+        ]);
+        const tag = cipher.getAuthTag();
+        // format: iv(12):tag(16):ciphertext — all base64
+        return [
+            iv.toString("base64"),
+            tag.toString("base64"),
+            encrypted.toString("base64"),
+        ].join(":");
     }
 
-    /**
-     * Encrypts plaintext using AES-256-GCM.
-     */
-    static encrypt(plain: string, secret: string = env.CONNECTOR_ENCRYPTION_SECRET!, ivOverride?: string): EncryptedData {
-        if (!secret) throw new Error("Encryption secret not configured.");
-
-        const key = this.getEncryptionKey(secret);
-        const iv = ivOverride ? Buffer.from(ivOverride, "base64") : crypto.randomBytes(IV_LENGTH);
-        const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
-
-        const ciphertext = Buffer.concat([
-            cipher.update(plain, "utf8"),
-            cipher.final()
-        ]);
-
-        const authTag = cipher.getAuthTag();
-
-        return {
-            ciphertext: Buffer.concat([ciphertext, authTag]).toString("base64"),
-            iv: iv.toString("base64")
-        };
-    }
-
-    /**
-     * Decrypts ciphertext using the provided IV and AES-256-GCM.
-     */
-    static decrypt(encrypted: EncryptedData, secret: string = env.CONNECTOR_ENCRYPTION_SECRET!): string {
-        if (!secret) throw new Error("Encryption secret not configured.");
-
-        const key = this.getEncryptionKey(secret);
-        const ivBuffer = Buffer.from(encrypted.iv, "base64");
-        const fullCiphertext = Buffer.from(encrypted.ciphertext, "base64");
-
-        const authTag = fullCiphertext.subarray(fullCiphertext.length - TAG_LENGTH);
-        const ciphertext = fullCiphertext.subarray(0, fullCiphertext.length - TAG_LENGTH);
-
-        const decipher = crypto.createDecipheriv(ALGORITHM, key, ivBuffer);
-        decipher.setAuthTag(authTag);
-
-        const decrypted = Buffer.concat([
-            decipher.update(ciphertext),
-            decipher.final()
-        ]);
-
-        return decrypted.toString("utf8");
+    static decrypt(blob: string): string {
+        const [ivB64, tagB64, dataB64] = blob.split(":");
+        const iv = Buffer.from(ivB64, "base64");
+        const tag = Buffer.from(tagB64, "base64");
+        const data = Buffer.from(dataB64, "base64");
+        const decipher = crypto.createDecipheriv(ALGORITHM, KEY, iv);
+        decipher.setAuthTag(tag);
+        return Buffer.concat([decipher.update(data), decipher.final()]).toString("utf8");
     }
 }

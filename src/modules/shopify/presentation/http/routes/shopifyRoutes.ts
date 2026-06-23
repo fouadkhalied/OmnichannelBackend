@@ -1,10 +1,7 @@
 import { Router } from "express";
 import { ShopifySyncController } from "../controllers/ShopifySyncController";
 import { ShopifyWebhookController } from "../controllers/ShopifyWebhookController";
-import { PgConnectorRepository } from "@shared/infrastructure/postgres/repositories/PgConnectorRepository";
-import { PgN8nInstanceRepository } from "@shared/infrastructure/postgres/repositories/PgN8nInstanceRepository";
 import { ShopifyOauthController } from "../controllers/ShopifyOauthController";
-import { N8nInstanceController } from "../controllers/N8nInstanceController";
 import { UnitOfWorkFactory } from "@shared/infrastructure/postgres/unitOfWork/UnitOfWorkFactory";
 import { z } from "zod";
 
@@ -24,11 +21,7 @@ export function createShopifyRouter(uowFactory: UnitOfWorkFactory): Router {
     const router = Router();
     const db = uowFactory.getDb();
 
-    const connectorRepository = new PgConnectorRepository(db);
-    const n8nRepository = new PgN8nInstanceRepository(db);
-
     const oauthController = new ShopifyOauthController(uowFactory);
-    const n8nController = new N8nInstanceController(n8nRepository);
 
     const TenantMiddleware = createTenantMiddleware(uowFactory);
     const WebhookShopDomainMiddleware = createWebhookShopDomainMiddleware(uowFactory);
@@ -76,21 +69,6 @@ export function createShopifyRouter(uowFactory: UnitOfWorkFactory): Router {
         "/oauth/callback",
         LoggerMiddleware,
         oauthController.callback.bind(oauthController)
-    );
-
-    // ── n8n Instance ─────────────────────────────────────────────────────────────
-    router.post(
-        "/n8n/instance",
-        AuthMiddleware,
-        TenantMiddleware,
-        n8nController.register.bind(n8nController)
-    );
-
-    router.get(
-        "/n8n/instance",
-        AuthMiddleware,
-        TenantMiddleware,
-        n8nController.getInstance.bind(n8nController)
     );
 
     return router;

@@ -14,7 +14,6 @@ export * from "./orderLineItems";
 export * from "./inventoryLevels";
 export * from "./refunds";
 export * from "./syncJobs";
-export * from "./n8nInstances";
 export * from "../../../../../modules/auth/infrastructure/postgres/schema/tenants";
 export * from "../../../../../modules/auth/infrastructure/postgres/schema/tenantSyncLogs";
 export * from "../../../../../modules/shopify/infrastructure/postgres/schema/stadging.schema";

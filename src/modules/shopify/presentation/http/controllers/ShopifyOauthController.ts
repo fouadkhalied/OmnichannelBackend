@@ -15,34 +15,27 @@ export class ShopifyOauthController {
     ) { }
 
     async initiate(req: Request, res: Response): Promise<void> {
-        try {
-            const tenantContext = (req as any).tenantContext;
-            const { shop, clientId, clientSecret } = req.body;
+    try {
+        const tenantContext = (req as any).tenantContext;
+        const { shop, clientId, clientSecret } = req.body;
 
-            if (!shop || !clientId || !clientSecret) {
-                res.status(400).json({ error: "Missing 'shop', 'clientId', or 'clientSecret' in request body" });
-                return;
-            }
-
-            const useCase = new InitiateOauthUseCase(
-                tenantContext,
-                this.uowFactory
-            );
-
-            const { redirectUrl } = await useCase.execute({
-                shop,
-                clientId,
-                clientSecret,
-            });
-
-            res.redirect(redirectUrl);
-        } catch (error) {
-            logger.error("shopify.oauth_initiate_failed", {
-                error: error instanceof Error ? error.message : String(error),
-            });
-            res.status(500).json({ error: error instanceof Error ? error.message : "Failed to initiate OAuth" });
+        if (!shop || !clientId || !clientSecret) {
+            res.status(400).json({ error: "Missing 'shop', 'clientId', or 'clientSecret' in request body" });
+            return;
         }
+
+        const useCase = new InitiateOauthUseCase(tenantContext); // ← no uowFactory
+
+        const { redirectUrl } = await useCase.execute({ shop, clientId, clientSecret });
+
+        res.redirect(redirectUrl);
+    } catch (error) {
+        logger.error("shopify.oauth_initiate_failed", {
+            error: error instanceof Error ? error.message : String(error),
+        });
+        res.status(500).json({ error: error instanceof Error ? error.message : "Failed to initiate OAuth" });
     }
+}
 
     async callback(req: Request, res: Response): Promise<void> {
         try {
