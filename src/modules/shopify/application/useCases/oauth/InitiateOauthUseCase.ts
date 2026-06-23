@@ -61,6 +61,7 @@ export class InitiateOauthUseCase extends BaseService {
         logger.info("shopify.oauth_initiate", {
             shop: normalizedShop,
             clientId: `${input.clientId.slice(0, 4)}...`,
+            redirectUrl,
         });
 
         return { redirectUrl };
