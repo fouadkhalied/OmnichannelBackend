@@ -22,6 +22,8 @@ export class GetInternalCredentialsByDomainUseCase {
             shopDomain: cred.shopDomain,
             apiVersion: cred.apiVersion,
             phoneNumberId: cred.phoneNumberId,
+            storeId: cred.storeId,
+            organizationId: cred.organizationId
         };
     }
 }

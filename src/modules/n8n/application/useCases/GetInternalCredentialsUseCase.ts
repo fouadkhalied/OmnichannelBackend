@@ -8,6 +8,8 @@ export interface InternalCredentialsOutput {
     shopDomain: string;
     apiVersion: string;
     phoneNumberId: string | null;
+    storeId: string;
+    organizationId: string;
 }
 
 export class GetInternalCredentialsUseCase {
@@ -30,6 +32,8 @@ export class GetInternalCredentialsUseCase {
             shopDomain: cred.shopDomain,
             apiVersion: cred.apiVersion,
             phoneNumberId: cred.phoneNumberId,
+            storeId: cred.storeId,
+            organizationId: cred.organizationId
         };
     }
 }
