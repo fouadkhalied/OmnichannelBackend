@@ -6,7 +6,7 @@ import { PgOrderRepository } from "../repositories/PgOrderRepository";
 import { PgOrderLineItemRepository } from "../repositories/PgOrderLineItemRepository";
 import { PgUserRepository } from "../repositories/PgUserRepository";
 import { PgOrganizationRepository } from "../repositories/PgOrganizationRepository";
-import { PgStoreRepository } from "../repositories/PgStoreRepository";
+import { PgStoreRepository } from "../../../../../modules/shopify/infrastructure/postgres/repositories/PgStoreRepository";
 import { PgSyncJobRepository } from "../../../../../modules/shopify/infrastructure/postgres/repositories/PgSyncJobRepository";
 import { PgStagingRepository } from "../../../../../modules/shopify/infrastructure/postgres/repositories/PgStagingRepository";
 import { IUnitOfWork } from "./IUnitOfWork";

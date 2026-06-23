@@ -1,5 +1,5 @@
 import { pgTable, uuid, text, jsonb, timestamp, index, unique, numeric } from "drizzle-orm/pg-core";
-import { stores } from "../../../../../modules/auth/infrastructure/postgres/schema/stores";
+import { stores } from "../../../../../modules/shopify/infrastructure/postgres/schema/stores";
 import { customers } from "./customers";
 
 export const orders = pgTable("orders", {

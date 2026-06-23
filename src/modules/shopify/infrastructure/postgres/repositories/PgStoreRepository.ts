@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
-import { stores, Store, NewStore } from "../../../../../modules/auth/infrastructure/postgres/schema/stores";
-import { IPgStoreRepository } from "./IPgStoreRepository";
+import { stores, Store, NewStore } from "../schema/stores";
+import { IPgStoreRepository } from "../../../../../libs/shared/infrastructure/postgres/repositories/IPgStoreRepository";
 
 export class PgStoreRepository implements IPgStoreRepository {
     constructor(private readonly db: any) { }
@@ -10,8 +10,9 @@ export class PgStoreRepository implements IPgStoreRepository {
             .insert(stores)
             .values(input)
             .onConflictDoUpdate({
-                target: [stores.id],
+                target: [stores.organizationId, stores.storeUrl],  // ← fix
                 set: {
+                    name: input.name,
                     shopifyClientId: input.shopifyClientId,
                     shopifyClientSecret: input.shopifyClientSecret,
                     updatedAt: new Date(),

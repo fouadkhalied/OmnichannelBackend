@@ -2,11 +2,13 @@ import crypto from "crypto";
 
 const STATE_VERSION = "v1";
 
+// ShopifyOauthState.ts
 export interface ShopifyOauthStatePayload {
     userId: string;
     organizationId: string;
     shopDomain: string;
     clientId: string;
+    clientSecret: string;  
     apiVersion: string;
     nonce: string;
     iat: number;

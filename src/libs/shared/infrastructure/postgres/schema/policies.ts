@@ -1,5 +1,5 @@
 import { pgTable, uuid, text, timestamp, index, unique } from "drizzle-orm/pg-core";
-import { stores } from "../../../../../modules/auth/infrastructure/postgres/schema/stores";
+import { stores } from "../../../../../modules/shopify/infrastructure/postgres/schema/stores";
 
 export const policies = pgTable("policies", {
     id: uuid("id").primaryKey().defaultRandom(),

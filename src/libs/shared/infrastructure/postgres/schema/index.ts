@@ -1,5 +1,5 @@
 export * from "./organizations";
-export * from "../../../../../modules/auth/infrastructure/postgres/schema/stores";
+export * from "../../../../../modules/shopify/infrastructure/postgres/schema/stores";
 export * from "./users";
 export * from "./userWorkspaces";
 export * from "./connectorCredentials";

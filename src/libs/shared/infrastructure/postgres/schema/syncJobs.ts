@@ -1,5 +1,5 @@
 import { pgTable, uuid, text, timestamp, jsonb, index, integer } from "drizzle-orm/pg-core";
-import { stores } from "../../../../../modules/auth/infrastructure/postgres/schema/stores";
+import { stores } from "../../../../../modules/shopify/infrastructure/postgres/schema/stores";
 
 export const syncJobs = pgTable("sync_jobs", {
     id: text("id").primaryKey(),

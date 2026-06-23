@@ -1,5 +1,5 @@
 import { pgTable, uuid, text, jsonb, timestamp, index, unique, numeric, integer } from "drizzle-orm/pg-core";
-import { stores } from "../../../../../modules/auth/infrastructure/postgres/schema/stores";
+import { stores } from "../../../../../modules/shopify/infrastructure/postgres/schema/stores";
 import { products } from "./products";
 
 export const variants = pgTable("variants", {

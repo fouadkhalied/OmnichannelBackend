@@ -1,5 +1,5 @@
 import { boolean, jsonb, text, timestamp, pgTable, uuid, index, unique } from "drizzle-orm/pg-core";
-import { stores } from "../../../../auth/infrastructure/postgres/schema/stores";
+import { stores } from "./stores";
 
 export const shopifyStaging = pgTable("shopify_staging", {
   id: uuid("id").primaryKey().defaultRandom(),

@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, index } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, timestamp, index, unique } from "drizzle-orm/pg-core"; // ← unique from here
 import { organizations } from "../../../../../libs/shared/infrastructure/postgres/schema/organizations";
 
 export const stores = pgTable("stores", {
@@ -13,6 +13,7 @@ export const stores = pgTable("stores", {
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => ({
     orgIdx: index("stores_organization_id_idx").on(table.organizationId),
+    uniqueOrgStore: unique("uq_stores_org_store_url").on(table.organizationId, table.storeUrl), // ← add this
 }));
 
 export type Store = typeof stores.$inferSelect;

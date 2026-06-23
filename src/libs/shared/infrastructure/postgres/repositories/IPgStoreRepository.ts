@@ -1,4 +1,4 @@
-import { Store, NewStore } from "../../../../../modules/auth/infrastructure/postgres/schema/stores";
+import { Store, NewStore } from "../../../../../modules/shopify/infrastructure/postgres/schema/stores";
 
 export interface IPgStoreRepository {
     upsert(input: NewStore): Promise<Store>;
