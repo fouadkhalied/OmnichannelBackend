@@ -12,6 +12,7 @@ export const connectorCredentials = pgTable("connector_credentials", {
     apiVersion: text("api_version").notNull(),
     scopes: text("scopes"),
     vectorDbUrl: text("vector_db_url"),
+    phoneNumberId: text("phone_number_id"),
 
     // Encrypted blob: { accessToken, clientSecret, webhookSecret }
     encryptedCredentials: text("encrypted_credentials").notNull(),

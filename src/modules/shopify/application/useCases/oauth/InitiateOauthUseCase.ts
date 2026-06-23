@@ -49,7 +49,7 @@ export class InitiateOauthUseCase extends BaseService {
             env.SHOPIFY_OAUTH_STATE_SECRET || "dev-state-secret-change-me",
         );
 
-        const scopes = env.SHOPIFY_OAUTH_SCOPES || "read_products,read_inventory,read_orders";
+        const scopes = env.SHOPIFY_OAUTH_SCOPES;
         const redirectUri = `${env.API_BASE_URL}/api/shopify/oauth/callback`;
         const redirectUrl = `https://${normalizedShop}/admin/oauth/authorize`
             + `?client_id=${input.clientId}`

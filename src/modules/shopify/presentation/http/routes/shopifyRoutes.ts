@@ -2,6 +2,7 @@ import { Router } from "express";
 import { ShopifySyncController } from "../controllers/ShopifySyncController";
 import { ShopifyWebhookController } from "../controllers/ShopifyWebhookController";
 import { ShopifyOauthController } from "../controllers/ShopifyOauthController";
+import { ShopifyStoreController } from "../controllers/ShopifyStoreController";
 import { UnitOfWorkFactory } from "@shared/infrastructure/postgres/unitOfWork/UnitOfWorkFactory";
 import { z } from "zod";
 
@@ -22,9 +23,19 @@ export function createShopifyRouter(uowFactory: UnitOfWorkFactory): Router {
     const db = uowFactory.getDb();
 
     const oauthController = new ShopifyOauthController(uowFactory);
+    const storeController = new ShopifyStoreController(uowFactory);
 
     const TenantMiddleware = createTenantMiddleware(uowFactory);
     const WebhookShopDomainMiddleware = createWebhookShopDomainMiddleware(uowFactory);
+
+    // ── Stores ────────────────────────────────────────────────────────────────────
+    router.get(
+        "/stores",
+        AuthMiddleware,
+        LoggerMiddleware,
+        RateLimiterMiddleware,
+        storeController.getStores.bind(storeController)
+    );
 
     // ── Sync ──────────────────────────────────────────────────────────────────────
     router.post(

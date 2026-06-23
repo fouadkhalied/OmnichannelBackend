@@ -1,21 +1,13 @@
-// application/useCases/internal/GetInternalCredentialsUseCase.ts
 import { Vault } from "src/libs/shared/crypto/vault";
 import { UnitOfWorkFactory } from "src/libs/shared/infrastructure/postgres/unitOfWork/UnitOfWorkFactory";
+import { InternalCredentialsOutput } from "./GetInternalCredentialsUseCase";
 
-export interface InternalCredentialsOutput {
-    accessToken: string;
-    webhookSecret: string;
-    shopDomain: string;
-    apiVersion: string;
-    phoneNumberId: string | null;
-}
-
-export class GetInternalCredentialsUseCase {
+export class GetInternalCredentialsByDomainUseCase {
     constructor(private readonly uowFactory: UnitOfWorkFactory) { }
 
-    async execute(storeId: string): Promise<InternalCredentialsOutput | null> {
+    async execute(shopDomain: string): Promise<InternalCredentialsOutput | null> {
         const cred = await this.uowFactory.execute(async (uow) =>
-            uow.credentials.findByStoreId(storeId)
+            uow.credentials.findByShopDomain(shopDomain)
         );
 
         if (!cred) return null;

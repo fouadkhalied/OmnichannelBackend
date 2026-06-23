@@ -17,6 +17,7 @@ export class PgCredentialRepository implements IPgCredentialRepository {
                     apiVersion: input.apiVersion,
                     scopes: input.scopes,
                     encryptedCredentials: input.encryptedCredentials,
+                    phoneNumberId: input.phoneNumberId,
                     status: input.status,
                     updatedAt: new Date(),
                 },
