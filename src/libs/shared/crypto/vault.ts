@@ -4,7 +4,7 @@ import crypto from "crypto";
 import { env } from "src/config/env";
 
 const ALGORITHM = "aes-256-gcm";
-const KEY = Buffer.from(env.ENCRYPTION_KEY, "hex"); // 32 bytes = 64 hex chars
+const KEY = Buffer.from(env.ENCRYPTION_KEY!, "hex"); // 32 bytes = 64 hex chars
 
 export class Vault {
     static encrypt(plaintext: string): string {

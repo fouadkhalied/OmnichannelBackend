@@ -7,7 +7,7 @@ import {
     UpsertCredentialsInput,
 } from "src/modules/shopify/domain/repositories/IConnectorRepository";
 import { ShopifyCredentials } from "src/modules/shopify/domain/repositories/IShopifyGraphQLClient";
-import { decryptCredentials, encryptCredentials } from "../../../crypto/encrypt";
+import { Vault } from "../../../crypto/vault";
 
 function splitTenantId(tenantId: string): { organizationId: string; storeId: string } {
     if (tenantId.includes(":")) {
@@ -40,7 +40,18 @@ export class PgConnectorRepository implements IConnectorRepository {
             throw new Error(`Shopify credentials not found for tenant ${tenantId}.`);
         }
 
-        const decrypted = decryptCredentials(row.encryptedCredentials, this.secret!);
+        let decrypted: any;
+        try {
+            const raw = Vault.decrypt(row.encryptedCredentials);
+            decrypted = JSON.parse(raw);
+        } catch (error) {
+            logger.error("credentials.decryption_failed", {
+                tenantId,
+                shopDomain: row.shopDomain,
+                error: error instanceof Error ? error.message : String(error)
+            });
+            throw new Error(`Failed to decrypt credentials for tenant ${tenantId}. The data might be in a legacy format or the encryption key is incorrect.`);
+        }
 
         return {
             accessToken: String(decrypted.accessToken || "").trim(),
@@ -85,7 +96,18 @@ export class PgConnectorRepository implements IConnectorRepository {
             throw new Error(`Webhook secret not found for tenant ${tenantId}`);
         }
 
-        const decrypted = decryptCredentials(row.encryptedCredentials, this.secret!);
+        let decrypted: any;
+        try {
+            const raw = Vault.decrypt(row.encryptedCredentials);
+            decrypted = JSON.parse(raw);
+        } catch (error) {
+            logger.error("webhook.secret_decryption_failed", {
+                tenantId,
+                error: error instanceof Error ? error.message : String(error)
+            });
+            throw new Error(`Failed to decrypt webhook secret for tenant ${tenantId}.`);
+        }
+
         if (!decrypted.webhookSecret) {
             throw new Error(`Webhook secret missing in credentials for tenant ${tenantId}`);
         }
@@ -94,7 +116,7 @@ export class PgConnectorRepository implements IConnectorRepository {
     }
 
     async upsertCredentials(input: UpsertCredentialsInput): Promise<void> {
-        const encrypted = encryptCredentials(
+        const encrypted = Vault.encrypt(
             JSON.stringify({
                 accessToken: input.accessToken,
                 shopDomain: input.shopDomain,
@@ -103,8 +125,7 @@ export class PgConnectorRepository implements IConnectorRepository {
                 apiVersion: input.apiVersion,
                 scopes: input.scopes,
                 webhookSecret: input.webhookSecret,
-            }),
-            this.secret!
+            })
         );
 
         await this.db
